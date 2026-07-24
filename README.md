@@ -159,6 +159,13 @@ Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-e
 
 See [DISTRIBUTED_TRACING_GUIDE.md](./DISTRIBUTED_TRACING_GUIDE.md) for detailed setup and usage instructions.
 
+#### System Architecture & Data Flow
+
+- **[System Architecture](./docs/architecture.md)** — High-level architecture overview, component interactions, and deployment topology
+- **[Sequence Diagrams](./docs/sequence-diagrams.md)** — Detailed workflow sequences for trade creation, dispute resolution, audit trails, and more
+- **[Audit Logging](./docs/audit-logging.md)** — Tamper-evident audit trail with cryptographic signatures and verification
+- **[Mediator Dashboard Spec](./docs/mediator-dashboard-spec.md)** — Complete specification for mediator dashboard including user stories, UI mockups, and implementation tasks
+
 ---
 
 ## 📐 Architecture Decision Records
