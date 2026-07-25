@@ -1,0 +1,285 @@
+# Audit Logging for Trade Events
+
+## Overview
+
+The Amana escrow platform implements tamper-evident audit logging for all trade events with cryptographic signatures. This enables verifiable audits and provides complete traceability of trade lifecycle events for compliance, dispute resolution, and forensic analysis.
+
+## Architecture
+
+The audit logging system consists of three main components:
+
+### 1. Trade Event Capture
+All significant trade events are captured at state transitions:
+- **CREATED**: Trade initiated by buyer
+- **FUNDED**: Escrow payment confirmed
+- **MANIFEST_SUBMITTED**: Seller provides delivery information
+- **VIDEO_SUBMITTED** / **EVIDENCE_SUBMITTED**: Parties submit supporting evidence
+- **DELIVERY_CONFIRMED**: Buyer confirms receipt
+- **DISPUTE_INITIATED**: Dispute escalation triggered
+- **RESOLVED**: Dispute resolution outcome recorded
+- **COMPLETED**: Trade finalized
+
+### 2. Cryptographic Signing
+Each audit export is cryptographically signed using EdDSA (Ed25519) to create a tamper-evident record:
+- Events are normalized into a canonical JSON format
+- SHA-256 hash computed over the entire payload
+- Signature created using Ed25519 private key
+- Payload hash and signature included in export metadata
+
+### 3. Verification
+Recipients can verify audit authenticity:
+- Public key obtained from signing configuration
+- Payload hash recomputed from events
+- Signature verified using public key
+- Returns boolean verification status
+
+## API Usage
+
+### Retrieve Trade History
+
+```bash
+GET /trades/:tradeId/history
+Authorization: Bearer {jwt}
+```
+
+**Response (JSON):**
+```json
+{
+  "format": "json",
+  "events": [
+    {
+      "eventType": "CREATED",
+      "timestamp": "2026-01-15T10:30:00.000Z",
+      "actor": "GC...",
+      "metadata": {
+        "amount": "1000",
+        "symbol": "USDC"
+      }
+    }
+  ]
+}
+```
+
+### Export with Signature
+
+```bash
+GET /trades/:tradeId/history?signed=true
+Authorization: Bearer {jwt}
+```
+
+**Response:**
+```json
+{
+  "format": "json",
+  "events": [...],
+  "integrity": {
+    "algorithm": "ed25519",
+    "keyId": "2026-01",
+    "payloadHash": "abc123...",
+    "signature": "base64encodedSignature=="
+  },
+  "canonicalPayload": {
+    "tradeId": "trade-001",
+    "generatedAt": "2026-01-15T10:31:00.000Z",
+    "events": [...]
+  }
+}
+```
+
+### Export as CSV
+
+```bash
+GET /trades/:tradeId/history?format=csv
+Authorization: Bearer {jwt}
+```
+
+**Response:** CSV file with columns:
+- eventType
+- timestamp
+- actor
+- metadata
+
+**With Signature:**
+```bash
+GET /trades/:tradeId/history?format=csv&signed=true
+Authorization: Bearer {jwt}
+```
+
+Returns JSON structure with CSV string and integrity metadata.
+
+### Verify Signature
+
+```bash
+GET /trades/:tradeId/history/verify?signature=base64encodedSignature
+Authorization: Bearer {jwt}
+```
+
+**Response:**
+```json
+{
+  "valid": true,
+  "payloadHash": "abc123...",
+  "algorithm": "ed25519",
+  "keyId": "2026-01"
+}
+```
+
+## Access Control
+
+- **Buyers and Sellers**: Can access their own trade history
+- **Mediators**: Can access trade history when a dispute exists
+- **Administrators**: Can access all trade histories
+- **Public**: Cannot access any trade history
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Cryptographic signing keys (Ed25519 format)
+AUDIT_SIGNING_KEY_ID=2026-01
+AUDIT_SIGNING_PRIVATE_KEY_PEM=-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+AUDIT_SIGNING_PUBLIC_KEY_PEM=-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----
+
+# Evidence metadata retention (days)
+EVIDENCE_METADATA_RETENTION_DAYS=90
+```
+
+### Key Generation
+
+Generate Ed25519 keypair using OpenSSL:
+
+```bash
+# Private key
+openssl genpkey -algorithm ED25519 -out private.pem
+
+# Public key
+openssl pkey -in private.pem -pubout -out public.pem
+
+# View PEM format
+cat private.pem
+cat public.pem
+```
+
+## Data Privacy & Retention
+
+### Sensitive Data Masking
+- **Vehicle Registration**: Masked to first 3 characters (e.g., `ABC***`)
+- **Evidence Metadata**: Redacted after retention period (default 90 days)
+- **Evidence CID/Filename**: Redacted for expired metadata
+
+### Admin Access
+Administrators can view unmasked data for investigation purposes.
+
+### Compliance
+- Tamper-evident records support regulatory audits
+- Immutable append-only design prevents retroactive modification
+- Timestamp canonicalization ensures chronological ordering
+- CSV exports facilitate compliance reporting
+
+## Implementation Details
+
+### Canonical Payload Format
+
+```typescript
+interface CanonicalAuditPayload {
+  tradeId: string;
+  generatedAt: string;  // ISO 8601
+  events: Array<{
+    eventType: TradeEventType;
+    timestamp: string;   // ISO 8601
+    actor: string;
+    metadata: Record<string, unknown>;
+  }>;
+}
+```
+
+### Integrity Metadata
+
+```typescript
+interface AuditIntegrityMetadata {
+  algorithm: "ed25519";
+  keyId: string;
+  payloadHash: string;  // SHA-256 hex
+  signature: string;    // base64
+}
+```
+
+### Signing Process
+
+1. Events retrieved from database
+2. Events normalized to canonical JSON
+3. UTF-8 bytes computed from JSON string
+4. SHA-256 hash of bytes
+5. Ed25519 signature computed using private key
+6. Signature base64 encoded
+7. Integrity metadata included in response
+
+### Verification Process
+
+1. Signature base64 decoded
+2. Payload hash recomputed from canonical JSON
+3. Ed25519 verification using public key
+4. Returns boolean result
+
+## Testing
+
+### Unit Tests
+```bash
+cd backend && npm test -- auditTrail.service.test.ts
+```
+
+### Integration Tests
+```bash
+cd backend && npm test -- auditTrail.integration.test.ts
+```
+
+### Manual Verification
+```bash
+# Get signed audit export
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3001/trades/trade-001/history?signed=true" | jq .
+
+# Verify signature
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:3001/trades/trade-001/history/verify?signature=$(jq -r .integrity.signature <<< $RESPONSE)"
+```
+
+## Error Handling
+
+### Common Errors
+
+| Status | Error | Cause |
+|--------|-------|-------|
+| 401 | Unauthorized | Missing/invalid JWT token |
+| 403 | Access denied | Caller not party to trade |
+| 404 | Trade not found | Trade ID does not exist |
+| 500 | Audit signing configuration invalid | Missing signing keys |
+
+### Configuration Errors
+
+```
+AuditSigningConfigError: AUDIT_SIGNING_KEY_ID and AUDIT_SIGNING_PRIVATE_KEY_PEM are required
+```
+
+Ensure environment variables are properly set before signing operations.
+
+## Security Considerations
+
+- **Key Management**: Private keys should be stored securely (AWS Secrets Manager, HashiCorp Vault)
+- **Key Rotation**: Rotate signing keys periodically; include key ID in configuration
+- **Payload Immutability**: Canonical format ensures consistent hashing across systems
+- **Algorithm Selection**: Ed25519 provides 128-bit security against forge attacks
+- **Audit Logging**: All audit access should be logged separately for forensic analysis
+
+## Future Enhancements
+
+1. **Blockchain Integration**: Anchor audit digests on immutable ledger
+2. **Key Rotation**: Automated key lifecycle management
+3. **Audit Dashboards**: Real-time compliance monitoring
+4. **Format Standardization**: Support for IODEF, CEF formats
+5. **Batch Verification**: Verify multiple audits in single request
