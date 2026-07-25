@@ -1,20 +1,30 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import type { LinkingOptions } from '@react-navigation/native';
 
 import type { RootStackParamList } from '../types/navigation';
-import { useAuthStore } from '../stores/authStore';
-import WalletConnectScreen from '../screens/WalletConnectScreen';
-import TradeListScreen from '../screens/TradeListScreen';
-import TradeDetailScreen from '../screens/TradeDetailScreen';
-import DisputeDetailScreen from '../screens/DisputeDetailScreen';
-import CreateTradeScreen from '../screens/CreateTradeScreen';
-import EvidenceCaptureScreen from '../screens/EvidenceCaptureScreen';
-import VaultDashboard from '../screens/VaultDashboard';
 import { useDeepLink } from '../hooks/useDeepLink';
 
+// Lazy-loaded screens — only bundled when navigated to
+const WalletConnectScreen = lazy(() => import('../screens/WalletConnectScreen'));
+const TradeListScreen = lazy(() => import('../screens/TradeListScreen'));
+const TradeDetailScreen = lazy(() => import('../screens/TradeDetailScreen'));
+const DisputeDetailScreen = lazy(() => import('../screens/DisputeDetailScreen'));
+const CreateTradeScreen = lazy(() => import('../screens/CreateTradeScreen'));
+const EvidenceCaptureScreen = lazy(() => import('../screens/EvidenceCaptureScreen'));
+const VaultDashboard = lazy(() => import('../screens/VaultDashboard'));
+
 const Stack = createStackNavigator<RootStackParamList>();
+
+function ScreenFallback() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color="#C8A23D" />
+    </View>
+  );
+}
 
 // Deep linking configuration
 const linking: LinkingOptions<RootStackParamList> = {
@@ -56,18 +66,20 @@ export function AppNavigator({ isAuthenticated }: AppNavigatorProps) {
         }
       }}
     >
-      <Stack.Navigator
-        initialRouteName={isAuthenticated ? 'TradeList' : 'WalletConnect'}
-        screenOptions={{ headerShown: false }}
-      >
-        <Stack.Screen name="WalletConnect" component={WalletConnectScreen} />
-        <Stack.Screen name="TradeList" component={TradeListScreen} />
-        <Stack.Screen name="TradeDetail" component={TradeDetailScreen} />
-        <Stack.Screen name="DisputeDetail" component={DisputeDetailScreen} />
-        <Stack.Screen name="CreateTrade" component={CreateTradeScreen} />
-        <Stack.Screen name="EvidenceCapture" component={EvidenceCaptureScreen} />
-        <Stack.Screen name="VaultDashboard" component={VaultDashboard} />
-      </Stack.Navigator>
+      <Suspense fallback={<ScreenFallback />}>
+        <Stack.Navigator
+          initialRouteName={isAuthenticated ? 'TradeList' : 'WalletConnect'}
+          screenOptions={{ headerShown: false }}
+        >
+          <Stack.Screen name="WalletConnect" component={WalletConnectScreen} />
+          <Stack.Screen name="TradeList" component={TradeListScreen} />
+          <Stack.Screen name="TradeDetail" component={TradeDetailScreen} />
+          <Stack.Screen name="DisputeDetail" component={DisputeDetailScreen} />
+          <Stack.Screen name="CreateTrade" component={CreateTradeScreen} />
+          <Stack.Screen name="EvidenceCapture" component={EvidenceCaptureScreen} />
+          <Stack.Screen name="VaultDashboard" component={VaultDashboard} />
+        </Stack.Navigator>
+      </Suspense>
     </NavigationContainer>
   );
 }

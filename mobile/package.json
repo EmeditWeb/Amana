@@ -13,7 +13,8 @@
     "prebuild": "expo prebuild --clean",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "jest",
+    "bundle:analyze": "npx expo export --dump-sourcemap && echo 'Bundle analysis complete. Check the output above for size details.'"
   },
   "dependencies": {
     "@react-navigation/native": "^6.1.17",

@@ -1,5 +1,5 @@
 "use client";
-import { TradeProvider, useTrade } from "./TradeContext";
+import { TradeProvider, useTradeStep } from "./TradeContext";
 import Step1Details from "./steps/Step1Details";
 import Step2Negotiation from "./steps/Step2Negotiation";
 import Step3Review from "./steps/Step3Review";
@@ -12,7 +12,7 @@ const STEPS = [
 ];
 
 function StepIndicator() {
-  const { step } = useTrade();
+  const { step } = useTradeStep();
   return (
     <div className="flex items-center gap-0 mb-8">
       {STEPS.map(({ index, label }, i) => (
@@ -49,7 +49,7 @@ function StepIndicator() {
 }
 
 function CreateTradeInner() {
-  const { step } = useTrade();
+  const { step } = useTradeStep();
   return (
     <div className="min-h-screen bg-bg-primary flex items-start justify-center px-4 py-12">
       <div className="w-full max-w-lg">

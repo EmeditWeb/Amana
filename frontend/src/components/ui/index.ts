@@ -3,7 +3,7 @@
 export { StatusBadge } from "./StatusBadge";
 export type { StatusBadgeProps, TradeStatus } from "./StatusBadge";
 export { Icon } from "./Icon";
-export type { IconProps } from "./Icon";
+export type { IconProps, IconName } from "./Icon";
 export { BentoCard } from "./BentoCard";
 export { DriverManifestForm } from "./DriverManifestForm";
 export type { DriverManifestData } from "./DriverManifestForm";
