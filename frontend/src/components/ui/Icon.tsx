@@ -11,8 +11,20 @@ const SIZE_MAP = {
   lg: 24,
 } as const;
 
+// Utility type: converts PascalCase Lucide icon keys to kebab-case
+type PascalToKebab<S extends string> = S extends `${infer First extends string}${infer Rest}`
+  ? First extends Uppercase<First>
+    ? First extends Lowercase<First>
+      ? `${First}${PascalToKebab<Rest>}`
+      : `${Lowercase<First>}${PascalToKebab<Rest>}`
+    : `${First}${PascalToKebab<Rest>}`
+  : "";
+
+// All valid kebab-case Lucide icon names derived from the icons registry
+export type IconName = PascalToKebab<keyof typeof icons & string>;
+
 export interface IconProps {
-  name: string;
+  name: IconName;
   size?: keyof typeof SIZE_MAP;
   className?: string;
   "aria-label"?: string;

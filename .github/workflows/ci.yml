@@ -122,7 +122,7 @@ jobs:
 
       - name: Frontend test
         if: matrix.stack == 'frontend'
-        run: pnpm test
+        run: pnpm test -- --coverage
         working-directory: frontend
 
       - name: Backend test
@@ -130,7 +130,7 @@ jobs:
         run: |
           export NODE_ENV=test
           export JWT_SECRET=test-jwt-secret-value-with-minimum-length-32
-          pnpm test
+          pnpm test -- --coverage
         working-directory: backend
 
       - name: Mobile type check
