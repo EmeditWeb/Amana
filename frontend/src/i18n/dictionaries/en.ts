@@ -174,6 +174,67 @@ const en = {
   "common.confirm": "Confirm",
   "common.back": "Back",
   "common.next": "Next",
+
+  // Trust Score
+  "trust.title": "Trust Score",
+  "trust.subtitle": "Your trading trust score with decay-weighted calculation",
+  "trust.loading": "Loading trust score\u2026",
+  "trust.error": "Failed to load trust score",
+  "trust.noData": "No trust score data available",
+  "trust.noDataDescription": "Start trading to build your trust score on the Amana platform.",
+  "trust.outOf": "out of 100",
+  "trust.lastUpdated": "Last updated",
+  "trust.accountAge": "Account age",
+  "trust.lastTrade": "Last trade",
+  "trust.never": "Never",
+
+  // Trust Tiers
+  "trust.tier.newcomer": "Newcomer",
+  "trust.tier.developing": "Developing",
+  "trust.tier.established": "Established",
+  "trust.tier.trusted": "Trusted",
+  "trust.tier.elite": "Elite",
+
+  // Trust Breakdown
+  "trust.breakdown.title": "Score Breakdown",
+  "trust.breakdown.base": "Base Score",
+  "trust.breakdown.tradeCompletion": "Trade Completion",
+  "trust.breakdown.volumeBonus": "Volume Bonus",
+  "trust.breakdown.disputePenalty": "Dispute Penalty",
+  "trust.breakdown.activityDecay": "Activity Decay",
+  "trust.breakdown.finalScore": "Final Score",
+
+  // Trust Stats
+  "trust.stats.totalTrades": "Total Trades",
+  "trust.stats.completedTrades": "Completed Trades",
+  "trust.stats.disputedTrades": "Disputed Trades",
+  "trust.stats.totalVolume": "Total Volume",
+  "trust.stats.successRate": "Success Rate",
+  "trust.stats.accountAge": "Account Age",
+
+  // Trust History
+  "trust.history.title": "Trust History",
+  "trust.history.subtitle": "Recent events that impacted your trust score",
+  "trust.history.empty": "No trust events yet. Complete trades to build your trust history.",
+  "trust.history.decayedImpact": "Decayed impact",
+
+  // Reputation (existing page, enhanced)
+  "reputation.title": "Reputation",
+  "reputation.subtitle": "Your trading reputation and trust metrics on the Amana platform",
+  "reputation.connectWallet": "Connect Wallet",
+  "reputation.connectWalletDescription": "Please connect your wallet to view your trust score and trading reputation on the Amana platform.",
+  "reputation.failedToLoad": "Failed to Load Reputation",
+  "reputation.tryAgain": "Try Again",
+  "reputation.noData": "No Reputation Data",
+  "reputation.noDataDescription": "Your reputation will be calculated once you start trading on the Amana platform.",
+  "reputation.trustScore": "Trust Score",
+  "reputation.totalTrades": "Total Trades",
+  "reputation.completed": "Completed",
+  "reputation.disputed": "Disputed",
+  "reputation.successRate": "Success Rate",
+  "reputation.trustHistory": "Trust History",
+  "reputation.trustHistorySubtitle": "Recent events that impacted your reputation score",
+  "reputation.trustHistoryEmpty": "No reputation events yet. Complete trades to build your trust history.",
 } as const;
 
 export default en;

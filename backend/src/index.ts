@@ -11,7 +11,8 @@ import { appLogger } from "./middleware/logger";
 import { initializeTracing } from "./config/tracing";
 import { HealthService } from "./services/health.service";
 import { createEvidenceVerificationWorker } from "./jobs/workers/evidence-verification.worker";
-import { evidenceVerificationQueue } from "./jobs/queue";
+import { createTrustScoreRecalculationWorker } from "./jobs/workers/trust-score-recalculation.worker";
+import { evidenceVerificationQueue, trustScoreRecalculationQueue } from "./jobs/queue";
 
 
 // Initialize distributed tracing before any other imports
@@ -111,6 +112,14 @@ async function bootstrap() {
       appLogger.error({ error }, "Failed to start EvidenceVerificationWorker");
     }
 
+    // Start trust score recalculation worker
+    try {
+      createTrustScoreRecalculationWorker();
+      appLogger.info("TrustScoreRecalculationWorker started");
+    } catch (error) {
+      appLogger.error({ error }, "Failed to start TrustScoreRecalculationWorker");
+    }
+
     // Schedule periodic evidence pin verification
     const isTest = (process.env.NODE_ENV ?? env.NODE_ENV) === "test";
     if (!isTest) {
@@ -139,6 +148,30 @@ async function bootstrap() {
       setInterval(() => {
         runVerification().catch(() => {});
       }, intervalMs);
+
+      // Schedule periodic trust score recalculation
+      const trustScoreIntervalMs = env.TRUST_SCORE_RECALCULATION_INTERVAL_MS;
+      appLogger.info({ intervalMs: trustScoreIntervalMs }, "Scheduling periodic trust score recalculation");
+
+      const runTrustScoreRecalculation = async () => {
+        try {
+          appLogger.info("Running scheduled trust score recalculation");
+          const job = await trustScoreRecalculationQueue.add("recalculate", {
+            triggeredBy: "scheduled",
+          });
+          appLogger.info({ jobId: job.id }, "Scheduled trust score recalculation job queued");
+        } catch (error) {
+          appLogger.error({ error }, "Failed to schedule trust score recalculation");
+        }
+      };
+
+      setTimeout(() => {
+        runTrustScoreRecalculation().catch(() => {});
+      }, 120_000);
+
+      setInterval(() => {
+        runTrustScoreRecalculation().catch(() => {});
+      }, trustScoreIntervalMs);
     }
   });
 }

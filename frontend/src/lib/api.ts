@@ -25,6 +25,10 @@ export type {
   TradeListResponse,
   TradeResponse,
   TradeStatsResponse,
+  TrustScoreBreakdown,
+  TrustScoreDetails,
+  TrustScoreEvent,
+  TrustTier,
   VerifyResponse,
 } from "./api/types";
 

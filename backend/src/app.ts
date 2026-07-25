@@ -38,6 +38,7 @@ import { stellarAccountCreateRoutes } from "./routes/stellar.account.create";
 import { createContractStateRouter } from "./routes/contract.state.routes";
 import { createAdminFeaturesRouter } from "./routes/admin.features.routes";
 import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-verification.routes";
+import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { env } from "./config/env";
 
@@ -125,6 +126,7 @@ export function createApp(): express.Application {
   app.use("/wallet", walletRoutes);
   app.use("/users", userRoutes);
   app.use("/users", reputationRoutes);
+  app.use("/users", createTrustScoreRouter());
   app.use(createNotificationPreferencesRouter());
   app.use(createNotificationsRouter());
 
