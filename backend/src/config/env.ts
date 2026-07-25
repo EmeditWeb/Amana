@@ -123,6 +123,10 @@ export const envSchema = z.object({
   RATE_LIMIT_USER_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_DISPUTE_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
   RATE_LIMIT_DISPUTE_MAX: z.coerce.number().int().positive().default(5),
+
+  // Trust Score configuration
+  TRUST_SCORE_DECAY_HALF_LIFE_DAYS: z.coerce.number().int().positive().default(90),
+  TRUST_SCORE_RECALCULATION_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

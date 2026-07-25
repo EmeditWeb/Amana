@@ -53,3 +53,15 @@ export const evidenceVerificationQueue = new Queue<EvidenceVerificationJobData>(
     connection: createQueueConnection(),
   },
 );
+
+export interface TrustScoreRecalculationJobData {
+  triggeredBy: string;
+  walletAddress?: string;
+}
+
+export const trustScoreRecalculationQueue = new Queue<TrustScoreRecalculationJobData>(
+  'trust-score-recalculation',
+  {
+    connection: createQueueConnection(),
+  },
+);

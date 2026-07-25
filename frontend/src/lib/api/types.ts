@@ -159,3 +159,51 @@ export interface ReputationResponse {
   successRate: number;
   history: ReputationEvent[];
 }
+
+export interface TrustScoreBreakdown {
+  baseScore: number;
+  tradeCompletionBonus: number;
+  volumeBonus: number;
+  disputePenalty: number;
+  activityDecay: number;
+  finalScore: number;
+}
+
+export type TrustTier =
+  | "newcomer"
+  | "developing"
+  | "established"
+  | "trusted"
+  | "elite";
+
+export interface TrustScoreEvent {
+  id: string;
+  event: string;
+  impact: number;
+  impactLabel: string;
+  timestamp: string;
+  type:
+    | "trade_completed"
+    | "trade_initiated"
+    | "dispute_initiated"
+    | "dispute_lost"
+    | "volume_milestone"
+    | "account_created";
+  decayedImpact: number;
+}
+
+export interface TrustScoreDetails {
+  trustScore: number;
+  breakdown: TrustScoreBreakdown;
+  stats: {
+    totalTrades: number;
+    completedTrades: number;
+    disputedTrades: number;
+    totalVolumeUsdc: number;
+    successRate: number;
+    accountAgeDays: number;
+    lastTradeAt: string | null;
+  };
+  tier: TrustTier;
+  history: TrustScoreEvent[];
+}
