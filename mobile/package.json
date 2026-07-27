@@ -14,6 +14,9 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
     "test": "jest",
+    "test:e2e": "jest --config e2e/jest.e2e.config.cjs",
+    "test:e2e:watch": "jest --config e2e/jest.e2e.config.cjs --watch",
+    "test:e2e:ci": "jest --config e2e/jest.e2e.config.cjs --ci --forceExit --detectOpenHandles",
     "bundle:analyze": "npx expo export --dump-sourcemap && echo 'Bundle analysis complete. Check the output above for size details.'"
   },
   "dependencies": {

@@ -66,6 +66,8 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 - Source of truth: `backend/src/docs/openapi.yaml`
 - Dev Swagger UI: `http://localhost:4000/api/docs`
 - JSON export: `http://localhost:4000/api/docs/openapi.json`
+- **API contract examples**: [`backend/docs/api-contract-examples.md`](./backend/docs/api-contract-examples.md) — JS/TypeScript snippets for authentication and all trade operations
+- **SDK usage guide**: [`backend/docs/sdk-usage.md`](./backend/docs/sdk-usage.md) — typed client wrapper for frontend, mobile, and Node.js
 
 The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-production runs so reviewers can inspect either format.
 

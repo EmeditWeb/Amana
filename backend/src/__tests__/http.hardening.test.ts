@@ -52,6 +52,31 @@ describe("Helmet security headers", () => {
     const res = await request(app).get("/health");
     expect(res.headers["content-security-policy"]).toBeDefined();
   });
+
+  it("sets Referrer-Policy: strict-origin-when-cross-origin", async () => {
+    const app = await buildApp();
+    const res = await request(app).get("/health");
+    expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  });
+
+  it("sets Permissions-Policy header", async () => {
+    const app = await buildApp();
+    const res = await request(app).get("/health");
+    expect(res.headers["permissions-policy"]).toBeDefined();
+    expect(res.headers["permissions-policy"]).toContain("geolocation=()");
+  });
+
+  it("removes X-Powered-By header", async () => {
+    const app = await buildApp();
+    const res = await request(app).get("/health");
+    expect(res.headers["x-powered-by"]).toBeUndefined();
+  });
+
+  it("sets X-Permitted-Cross-Domain-Policies: none", async () => {
+    const app = await buildApp();
+    const res = await request(app).get("/health");
+    expect(res.headers["x-permitted-cross-domain-policies"]).toBe("none");
+  });
 });
 
 // ---------------------------------------------------------------------------

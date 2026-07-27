@@ -6,6 +6,7 @@ import { correlationIdMiddleware } from './middleware/correlationId.middleware';
 import { tracingMiddleware } from './middleware/tracing.middleware';
 import loggerMiddleware from './middleware/logger';
 import { requestLoggerMiddleware } from "./middleware/request.logger.middleware";
+import securityHeaders from "./middleware/securityHeaders";
 import { authRoutes } from "./routes/auth.routes";
 import { walletRoutes } from "./routes/wallet.routes";
 import { createTradeRouter } from "./routes/trade.routes";
@@ -77,7 +78,7 @@ export function createApp(): express.Application {
     app.set('trust proxy', 1);
   }
 
-  // Security headers
+  // Security headers – production-grade defaults
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -89,18 +90,32 @@ export function createApp(): express.Application {
           connectSrc: ["'self'"],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
         },
       },
       crossOriginEmbedderPolicy: true,
       crossOriginOpenerPolicy: { policy: 'same-origin' },
       crossOriginResourcePolicy: { policy: 'same-origin' },
-      referrerPolicy: { policy: 'no-referrer' },
-      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
       noSniff: true,
       frameguard: { action: 'deny' },
       xssFilter: true,
+      hidePoweredBy: true,
+      permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+      dnsPrefetchControl: { allow: false },
+      xDownloadOptions: true,
     })
   );
+
+  // Additional production security headers (layer 2 hardening)
+  app.use(securityHeaders);
 
   // Environment-driven CORS
   app.use(cors(buildCorsOptions()));
