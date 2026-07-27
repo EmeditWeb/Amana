@@ -188,3 +188,53 @@ jobs:
           name: ${{ matrix.stack }}-artifact
           path: ${{ matrix.stack == 'frontend' && 'frontend/coverage/' || matrix.stack == 'backend' && 'backend/coverage/' || matrix.stack == 'mobile' && 'mobile/ci-artifacts/' || matrix.stack == 'contracts' && 'contracts/amana_escrow/target/wasm32-unknown-unknown/release/amana_escrow.wasm' }}
           retention-days: 7
+
+  contract-tests:
+    name: Frontend ↔ Backend Pact contracts
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: backend
+
+      - name: Generate consumer pacts
+        run: pnpm test:pact
+        working-directory: frontend
+
+      - name: Verify backend provider
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
+        run: pnpm test:pact
+        working-directory: backend
+
+      - name: Publish pact artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: amana-pacts
+          path: frontend/tests/pact/pacts/*.json
+          if-no-files-found: error
+          retention-days: 14

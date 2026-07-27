@@ -9,7 +9,9 @@ export interface UseOfflineReturn {
   retryOnline: () => Promise<void>;
 }
 
-const ONLINE_CHECK_URL = "https://www.google.com/generate_204";
+// Same-origin probing avoids CORS and privacy failures from third-party health
+// checks while still verifying that the app shell is reachable.
+const ONLINE_CHECK_URL = "/";
 const ONLINE_CHECK_INTERVAL_MS = 5000;
 
 export function useOffline(): UseOfflineReturn {

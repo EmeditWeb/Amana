@@ -3,12 +3,14 @@
 import { SidebarStateProvider } from "@/components/layout/SidebarStateProvider";
 import { AppTopNav } from "@/components/layout/AppTopNav";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { NetworkStatusBanner } from "@/components/ui/NetworkStatusBanner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarStateProvider>
       <div className="flex flex-col h-screen">
         <AppTopNav />
+        <NetworkStatusBanner />
         <div className="flex flex-1 overflow-hidden">
           <AppSidebar />
           <main className="flex-1 overflow-y-auto h-full">{children}</main>
