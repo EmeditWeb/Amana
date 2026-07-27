@@ -26,6 +26,7 @@ import { createHealthRouter } from "./routes/health.routes";
 import { createHealthDetailRouter } from "./routes/health.detail.routes";
 import { createNotificationPreferencesRouter } from "./routes/notifications.preferences.routes";
 import { createNotificationsRouter } from "./routes/notifications.inapp.routes";
+import { createMetricsRouter } from "./routes/metrics.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
@@ -136,6 +137,9 @@ export function createApp(): express.Application {
   // Enhanced health check with deep introspection
   app.use("/health", createHealthRouter());
   app.use("/health", createHealthDetailRouter());
+
+  // Prometheus metrics endpoint
+  app.use(createMetricsRouter());
 
   app.use("/auth", authRoutes);
   app.use("/wallet", walletRoutes);

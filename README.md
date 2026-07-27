@@ -161,12 +161,18 @@ Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-e
 
 See [DISTRIBUTED_TRACING_GUIDE.md](./DISTRIBUTED_TRACING_GUIDE.md) for detailed setup and usage instructions.
 
+**Application Metrics & Monitoring**:
+- **[Prometheus Metrics](./docs/PROMETHEUS_METRICS.md)** — Trade throughput, dispute counts, and processing latency metrics exposed at `/metrics`
+
 #### System Architecture & Data Flow
 
 - **[System Architecture](./docs/architecture.md)** — High-level architecture overview, component interactions, and deployment topology
 - **[Sequence Diagrams](./docs/sequence-diagrams.md)** — Detailed workflow sequences for trade creation, dispute resolution, audit trails, and more
 - **[Audit Logging](./docs/audit-logging.md)** — Tamper-evident audit trail with cryptographic signatures and verification
 - **[Mediator Dashboard Spec](./docs/mediator-dashboard-spec.md)** — Complete specification for mediator dashboard including user stories, UI mockups, and implementation tasks
+
+**Testing & Quality Assurance**:
+- **[Visual Regression Testing](./docs/VISUAL_REGRESSION_TESTING.md)** — Frontend UI regression tests using Playwright with multi-viewport support
 
 ---
 
@@ -184,6 +190,11 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 
 Amana is an open-source project aimed at improving food security and trade efficiency. We welcome developers, designers, and agricultural experts!
 
+**New to the project?** Start with the [Contributor Onboarding Guide](./docs/CONTRIBUTOR_ONBOARDING.md) for setup instructions and development workflows.
+
+**Full guidelines**: See [CONTRIBUTING.md](./CONTRIBUTING.md) for code standards, testing requirements, and PR process.
+
+Quick start:
 1. Fork the Project.
 2. Create your Feature Branch (`git checkout -b feature/NewFeature`).
 3. Commit your Changes (`git commit -m 'Add NewFeature'`).
