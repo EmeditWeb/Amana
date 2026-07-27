@@ -1,6 +1,7 @@
 import { PrismaClient, DisputeStatus } from "@prisma/client";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
+import { TracingHelper } from "../config/tracing";
 import {
   COMPLETED_DISPUTE_STATUSES,
   applyDisputeStatusTransition,
@@ -185,49 +186,62 @@ export class DisputeService {
     mediatorAddress: string,
     newStatus: DisputeStatus,
   ): Promise<DisputeResponse> {
-    if (!getMediatorAllowlist().has(mediatorAddress)) {
-      throw new AppError(
-        ErrorCode.AUTH_ERROR,
-        "Unauthorized: Not a mediator",
-        403,
-      );
-    }
+    return TracingHelper.withSpan(
+      "dispute.transition_status",
+      async (span) => {
+        if (!getMediatorAllowlist().has(mediatorAddress)) {
+          throw new AppError(
+            ErrorCode.AUTH_ERROR,
+            "Unauthorized: Not a mediator",
+            403,
+          );
+        }
 
-    return this.prisma.$transaction(async (tx) => {
-      const dispute = await tx.dispute.findFirst({
-        where: { tradeId },
-        include: disputeInclude,
-      });
+        return this.prisma.$transaction(async (tx) => {
+          const dispute = await tx.dispute.findFirst({
+            where: { tradeId },
+            include: disputeInclude,
+          });
 
-      if (!dispute) {
-        throw new AppError(
-          ErrorCode.DISPUTE_NOT_FOUND,
-          `No dispute found for trade: ${tradeId}`,
-          404,
-        );
-      }
+          if (!dispute) {
+            throw new AppError(
+              ErrorCode.DISPUTE_NOT_FOUND,
+              `No dispute found for trade: ${tradeId}`,
+              404,
+            );
+          }
 
-      // Idempotency: a retry after a network timeout should succeed silently
-      // when the first request already applied the transition.
-      if (dispute.status === newStatus) {
-        return toDisputeResponse(dispute);
-      }
+          span.setAttributes({
+            "trade.id": tradeId,
+            "dispute.id": dispute.id,
+            "dispute.status_from": dispute.status,
+            "dispute.status_to": newStatus,
+          });
 
-      assertValidTransition(dispute.status, newStatus);
+          // Idempotency: a retry after a network timeout should succeed silently
+          // when the first request already applied the transition.
+          if (dispute.status === newStatus) {
+            return toDisputeResponse(dispute);
+          }
 
-      const applied = await applyDisputeStatusTransition(
-        tx,
-        dispute,
-        newStatus,
-      );
-      assertTransitionApplied(applied, tradeId);
+          assertValidTransition(dispute.status, newStatus);
 
-      const updated = await tx.dispute.findUniqueOrThrow({
-        where: { id: dispute.id },
-        include: disputeInclude,
-      });
+          const applied = await applyDisputeStatusTransition(
+            tx,
+            dispute,
+            newStatus,
+          );
+          assertTransitionApplied(applied, tradeId);
 
-      return toDisputeResponse(updated);
-    });
+          const updated = await tx.dispute.findUniqueOrThrow({
+            where: { id: dispute.id },
+            include: disputeInclude,
+          });
+
+          return toDisputeResponse(updated);
+        });
+      },
+      { attributes: { "trade.id": tradeId } },
+    );
   }
 }
