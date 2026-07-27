@@ -62,3 +62,7 @@ path = "tests/metrics_tests.rs"
 [[test]]
 name = "state_machine_fuzz_tests"
 path = "tests/state_machine_fuzz_tests.rs"
+
+[[test]]
+name = "storage_struct_golden_tests"
+path = "tests/storage_struct_golden_tests.rs"
