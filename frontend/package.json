@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "jest --config jest.config.ts",
+    "test:pact": "jest --config jest.config.ts --runInBand tests/pact/trades.pact.test.ts",
     "test:watch": "jest --config jest.config.ts --watch",
     "test:coverage": "jest --config jest.config.ts --coverage",
     "test:visual": "playwright test",
