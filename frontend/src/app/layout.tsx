@@ -69,3 +69,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+export { reportWebVitals } from "@/lib/performance";

@@ -156,9 +156,9 @@ jobs:
         run: pnpm lint
         working-directory: mobile
 
-      - name: Mobile Expo build check
+      - name: Mobile security audit
         if: matrix.stack == 'mobile'
-        run: pnpm prebuild --clean --non-interactive || true
+        run: pnpm audit --audit-level=high
         working-directory: mobile
 
       - name: Deployment safety checks
