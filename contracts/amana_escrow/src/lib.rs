@@ -465,7 +465,7 @@ impl EscrowContract {
         if env.storage().instance().has(&DataKey::Initialized) {
             panic!("AlreadyInitialized");
         }
-        assert!(fee_bps <= 10_000, "fee_bps must not exceed 10000");
+        assert!(fee_bps <= MAX_FEE_BPS, "fee_bps must not exceed MAX_FEE_BPS (500)");
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
