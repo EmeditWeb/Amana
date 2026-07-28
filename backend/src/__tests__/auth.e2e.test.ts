@@ -43,6 +43,11 @@ jest.mock("ioredis", () =>
       redisStore.delete(key);
       return Promise.resolve(1);
     }),
+    getdel: jest.fn((key: string) => {
+      const value = redisStore.get(key) ?? null;
+      redisStore.delete(key);
+      return Promise.resolve(value);
+    }),
     exists: jest.fn((key: string) =>
       Promise.resolve(redisStore.has(key) ? 1 : 0)
     ),
@@ -415,12 +420,13 @@ describe("POST /auth/logout", () => {
       .post("/auth/logout")
       .set("Authorization", `Bearer ${token}`);
 
-    // Token must now be rejected with revoked error
+    // Token must now be rejected — the API intentionally returns a generic
+    // "Unauthorized" body (no revocation-specific detail) for any auth failure.
     const afterLogout = await request(app)
       .get("/protected")
       .set("Authorization", `Bearer ${token}`);
     expect(afterLogout.status).toBe(401);
-    expect(afterLogout.body.error).toMatch(/revoked/i);
+    expect(afterLogout.body.error).toBe("Unauthorized");
   });
 
   it("rejects logout with no Authorization header (401)", async () => {

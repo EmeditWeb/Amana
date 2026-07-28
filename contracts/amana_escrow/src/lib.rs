@@ -3795,6 +3795,45 @@ mod test {
         );
     }
 
+    /// Regression test for #842: deposit_with_path must bump the contract
+    /// instance TTL, mirroring finalize_path_payment. Without this, the
+    /// instance could expire while a path payment is pending and funds
+    /// would become permanently locked.
+    #[test]
+    fn test_deposit_with_path_bumps_instance_ttl() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, _admin, buyer, seller, _treasury, _cngn_id, ngn_id) =
+            setup_path_payment_env(&env, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let source_amount = 10_000_i128;
+        let dest_min = 9_900_i128;
+
+        let ngn_mint = token::StellarAssetClient::new(&env, &ngn_id);
+        ngn_mint.mint(&buyer, &source_amount);
+
+        let trade_id =
+            client.create_trade(&buyer, &seller, &source_amount, &5000_u32, &5000_u32, &None);
+
+        // Let the instance TTL run down to its last ledger before expiry.
+        let current_ledger = env.ledger().sequence();
+        env.ledger()
+            .set_sequence_number(current_ledger + INSTANCE_TTL_EXTEND_TO - 1);
+        assert_eq!(env.deployer().get_contract_instance_ttl(&contract_id), 1);
+
+        let path = Vec::new(&env);
+        client.deposit_with_path(&trade_id, &buyer, &source_amount, &dest_min, &path);
+
+        // deposit_with_path must restore the instance TTL just like every
+        // other state-mutating entrypoint, otherwise the instance could
+        // expire while the path payment intent is still pending.
+        assert_eq!(
+            env.deployer().get_contract_instance_ttl(&contract_id),
+            INSTANCE_TTL_EXTEND_TO
+        );
+    }
+
     /// deposit_with_path panics if source_amount is zero.
     #[test]
     #[should_panic(expected = "source_amount must be greater than zero")]

@@ -13,7 +13,10 @@ export const authMiddleware = async (
   // Use centralized auth helper for proper error classification
   const { user, error } = await AuthHelper.authenticateRequest(
     req,
-    AuthService.validateToken,
+    // Bind so `this` inside the static method resolves to AuthService when
+    // invoked as a bare function reference — otherwise `this.isTokenRevoked`
+    // throws for every valid token (unbound static method reference).
+    AuthService.validateToken.bind(AuthService),
   );
 
   if (error) {

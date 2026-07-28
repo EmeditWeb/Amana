@@ -6,6 +6,7 @@ import { findOrCreateUser } from './user.service';
 import { AppError, ErrorCode, isAppError } from '../errors/errorCodes';
 import { env } from '../config/env';
 import { redis } from '../lib/redis';
+import { TracingHelper } from '../config/tracing';
 
 const CHALLENGE_PREFIX = 'challenge:';
 const REVOKED_PREFIX = 'revoked_jti:';
@@ -33,56 +34,74 @@ export interface AuthRequest extends Request {
 
 export class AuthService {
   static async generateChallenge(walletAddress: string): Promise<string> {
-    if (!StrKey.isValidEd25519PublicKey(walletAddress)) {
-      throw new AppError(ErrorCode.VALIDATION_ERROR, 'Invalid Stellar public key', 400);
-    }
+    return TracingHelper.withSpan(
+      'auth.generate_challenge',
+      async (span) => {
+        if (!StrKey.isValidEd25519PublicKey(walletAddress)) {
+          throw new AppError(ErrorCode.VALIDATION_ERROR, 'Invalid Stellar public key', 400);
+        }
 
-    try {
-      const challenge = crypto.randomBytes(32).toString('base64url');
-      const key = `${CHALLENGE_PREFIX}${walletAddress.toLowerCase()}`;
+        try {
+          const challenge = crypto.randomBytes(32).toString('base64url');
+          const key = `${CHALLENGE_PREFIX}${walletAddress.toLowerCase()}`;
 
-      await redis.set(key, challenge, 'EX', CHALLENGE_TTL);
-      return challenge;
-    } catch (error: unknown) {
-      if (isAppError(error)) throw error;
-      throw new AppError(ErrorCode.INFRA_ERROR, 'Authentication service dependency failure', 503);
-    }
+          await redis.set(key, challenge, 'EX', CHALLENGE_TTL);
+          span.setAttributes({ 'auth.wallet_address': walletAddress.toLowerCase() });
+          return challenge;
+        } catch (error: unknown) {
+          if (isAppError(error)) throw error;
+          throw new AppError(ErrorCode.INFRA_ERROR, 'Authentication service dependency failure', 503);
+        }
+      },
+      { attributes: { 'auth.operation': 'generate_challenge' } },
+    );
   }
 
   static async verifySignatureAndIssueJWT(walletAddress: string, signedChallenge: string): Promise<string> {
-    try {
-      const key = `${CHALLENGE_PREFIX}${walletAddress.toLowerCase()}`;
-      // Atomic get-and-delete prevents replay: a concurrent request that calls
-      // getdel after us will receive null even before we finish verification.
-      const challenge = await (redis as any).getdel(key);
+    return TracingHelper.withSpan(
+      'auth.verify_signature',
+      async (span) => {
+        try {
+          const key = `${CHALLENGE_PREFIX}${walletAddress.toLowerCase()}`;
+          // Atomic get-and-delete prevents replay: a concurrent request that calls
+          // getdel after us will receive null even before we finish verification.
+          const challenge = await (redis as any).getdel(key);
 
-      if (!challenge) {
-        throw new AppError(ErrorCode.AUTH_ERROR, 'Challenge expired or invalid. Request new challenge.', 401);
-      }
+          if (!challenge) {
+            throw new AppError(ErrorCode.AUTH_ERROR, 'Challenge expired or invalid. Request new challenge.', 401);
+          }
 
-      const publicKey = Keypair.fromPublicKey(walletAddress);
-      let isValid = false;
-      try {
-        isValid = publicKey.verify(
-          Buffer.from(challenge, "utf8"),
-          Buffer.from(signedChallenge, "base64url"),
-        );
-      } catch (e) {
-        isValid = false;
-      }
+          const publicKey = Keypair.fromPublicKey(walletAddress);
+          let isValid = false;
+          try {
+            isValid = publicKey.verify(
+              Buffer.from(challenge, "utf8"),
+              Buffer.from(signedChallenge, "base64url"),
+            );
+          } catch (e) {
+            isValid = false;
+          }
 
-      if (!isValid) {
-        throw new AppError(ErrorCode.AUTH_ERROR, 'Invalid signature', 401);
-      }
+          span.setAttributes({
+            'auth.wallet_address': walletAddress.toLowerCase(),
+            'auth.signature_valid': isValid,
+          });
 
-      // Ensure user exists
-      await findOrCreateUser(walletAddress);
+          if (!isValid) {
+            throw new AppError(ErrorCode.AUTH_ERROR, 'Invalid signature', 401);
+          }
 
-      return this.issueToken(walletAddress);
-    } catch (error: unknown) {
-      if (isAppError(error)) throw error;
-      throw new AppError(ErrorCode.INFRA_ERROR, 'Authentication service dependency failure', 503);
-    }
+          // Ensure user exists
+          await findOrCreateUser(walletAddress);
+
+          return this.issueToken(walletAddress);
+        } catch (error: unknown) {
+          if (isAppError(error)) throw error;
+          throw new AppError(ErrorCode.INFRA_ERROR, 'Authentication service dependency failure', 503);
+        }
+      },
+      { attributes: { 'auth.operation': 'verify_signature' } },
+    );
   }
 
   static async validateToken(token: string): Promise<JWTPayload> {
