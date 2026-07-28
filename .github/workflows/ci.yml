@@ -155,6 +155,11 @@ jobs:
         run: pnpm lint
         working-directory: mobile
 
+      - name: Mobile security audit
+        if: matrix.stack == 'mobile'
+        run: pnpm audit --audit-level=high
+        working-directory: mobile
+
       - name: Deployment safety checks
         if: matrix.stack == 'contracts'
         run: ../../scripts/check-contract-deployment-safety.sh
