@@ -93,6 +93,13 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Cache Rust dependencies and build
+        if: matrix.stack == 'contracts'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+          cache-targets: true
+
       - name: Cache cargo-audit binary
         if: matrix.stack == 'contracts'
         id: cache-cargo-audit
@@ -123,6 +130,11 @@ jobs:
       - name: Frontend test
         if: matrix.stack == 'frontend'
         run: pnpm test -- --coverage
+        working-directory: frontend
+
+      - name: Frontend visual regression tests
+        if: matrix.stack == 'frontend'
+        run: pnpm test:visual
         working-directory: frontend
 
       - name: Backend test
