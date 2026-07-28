@@ -4,12 +4,16 @@ import React, { useRef, useState } from "react";
 import { Video } from "lucide-react";
 import { BentoCard } from "./ui/BentoCard";
 import { Icon } from "./ui/Icon";
+import { apiConfig } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface VideoUploadCardProps {
+  tradeId: string;
   onUpload?: (ipfsHash: string) => void;
 }
 
-export function VideoUploadCard({ onUpload }: VideoUploadCardProps) {
+export function VideoUploadCard({ tradeId, onUpload }: VideoUploadCardProps) {
+  const { token } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [ipfsHash, setIpfsHash] = useState<string | null>(null);
@@ -19,6 +23,10 @@ export function VideoUploadCard({ onUpload }: VideoUploadCardProps) {
 
   const handleFile = async (file: File) => {
     if (!file) return;
+    if (!token) {
+      setError("You must be signed in to upload evidence");
+      return;
+    }
     setPreview(URL.createObjectURL(file));
     setError(null);
     setUploading(true);
@@ -26,6 +34,7 @@ export function VideoUploadCard({ onUpload }: VideoUploadCardProps) {
 
     try {
       const data = new FormData();
+      data.append("tradeId", tradeId);
       data.append("file", file);
 
       const xhr = new XMLHttpRequest();
@@ -39,18 +48,14 @@ export function VideoUploadCard({ onUpload }: VideoUploadCardProps) {
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             const res = JSON.parse(xhr.responseText);
-            resolve(res.IpfsHash ?? res.cid ?? res.hash);
+            resolve(res.cid);
           } else {
             reject(new Error(`Upload failed: ${xhr.statusText}`));
           }
         };
         xhr.onerror = () => reject(new Error("Network error during upload"));
-        xhr.open(
-          "POST",
-          "https://api.pinata.cloud/pinning/pinFileToIPFS"
-        );
-        const jwt = process.env.NEXT_PUBLIC_PINATA_JWT;
-        if (jwt) xhr.setRequestHeader("Authorization", `Bearer ${jwt}`);
+        xhr.open("POST", `${apiConfig.getBaseUrl()}/evidence/video`);
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.send(data);
       });
 

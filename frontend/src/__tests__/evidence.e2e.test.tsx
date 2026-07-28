@@ -14,6 +14,11 @@ import userEvent from "@testing-library/user-event";
 import { VideoUploadCard } from "@/components/ui/VideoUploadCard";
 import { api } from "@/lib/api";
 
+// Mock useAuth to provide a JWT without requiring an AuthProvider wrapper
+jest.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ token: "mock-jwt-token" }),
+}));
+
 // Mock the BentoCard component
 jest.mock("@/components/ui/BentoCard", () => ({
   BentoCard: ({ children, title }: { children: React.ReactNode; title?: string; icon?: React.ReactNode; glowVariant?: string; className?: string }) => (
@@ -50,7 +55,7 @@ global.XMLHttpRequest = jest.fn(() => ({
   setRequestHeader: jest.fn(),
   send: jest.fn(),
   status: 200,
-  responseText: JSON.stringify({ IpfsHash: "QmTestHash123" }),
+  responseText: JSON.stringify({ cid: "QmTestHash123" }),
 })) as any;
 
 describe("Evidence Upload and Playback Journey", () => {
@@ -61,7 +66,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
   describe("Evidence Upload Flow", () => {
     it("should render upload card with proper UI elements", () => {
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       expect(screen.getByText("Evidence Upload")).toBeInTheDocument();
       expect(
@@ -76,7 +81,7 @@ describe("Evidence Upload and Playback Journey", () => {
       const user = userEvent.setup();
       const onUpload = jest.fn();
 
-      render(<VideoUploadCard onUpload={onUpload} />);
+      render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload} />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -95,7 +100,7 @@ describe("Evidence Upload and Playback Journey", () => {
     });
 
     it("should display upload progress during file upload", async () => {
-      const { container } = render(<VideoUploadCard />);
+      const { container } = render(<VideoUploadCard tradeId="trade-1" />);
 
       // Simulate file selection
       const input = container.querySelector('input[type="file"]');
@@ -133,7 +138,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -154,7 +159,7 @@ describe("Evidence Upload and Playback Journey", () => {
     });
 
     it("should disable submit button until file is uploaded", () => {
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const submitButton = screen.getByRole("button", {
         name: /Submit Proof/i,
@@ -173,12 +178,12 @@ describe("Evidence Upload and Playback Journey", () => {
           setTimeout(() => this.onload?.(), 100);
         }),
         status: 200,
-        responseText: JSON.stringify({ IpfsHash: "QmSuccessHash456" }),
+        responseText: JSON.stringify({ cid: "QmSuccessHash456" }),
       };
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -205,12 +210,12 @@ describe("Evidence Upload and Playback Journey", () => {
           setTimeout(() => this.onload?.(), 100);
         }),
         status: 200,
-        responseText: JSON.stringify({ IpfsHash: "QmCallbackHash" }),
+        responseText: JSON.stringify({ cid: "QmCallbackHash" }),
       };
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard onUpload={onUpload} />);
+      render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload} />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -348,7 +353,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -369,7 +374,7 @@ describe("Evidence Upload and Playback Journey", () => {
     });
 
     it("should handle invalid file types", async () => {
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const input = document.querySelector('input[type="file"]');
 
@@ -394,7 +399,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       // Component should still render without JWT
       expect(screen.getByText("Evidence Upload")).toBeInTheDocument();
@@ -414,12 +419,12 @@ describe("Evidence Upload and Playback Journey", () => {
           setTimeout(() => this.onload?.(), 50);
         }),
         status: 200,
-        responseText: JSON.stringify({ IpfsHash: "QmConcurrentHash" }),
+        responseText: JSON.stringify({ cid: "QmConcurrentHash" }),
       };
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      const { container, rerender } = render(<VideoUploadCard onUpload={onUpload1} />);
+      const { container, rerender } = render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload1} />);
 
       // Simulate first upload
       const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -427,7 +432,7 @@ describe("Evidence Upload and Playback Journey", () => {
       fireEvent.change(fileInput, { target: { files: [file1] } });
 
       // Rerender with different callback
-      rerender(<VideoUploadCard onUpload={onUpload2} />);
+      rerender(<VideoUploadCard tradeId="trade-1" onUpload={onUpload2} />);
 
       await waitFor(() => {
         expect(onUpload1).toHaveBeenCalled();
@@ -464,12 +469,12 @@ describe("Evidence Upload and Playback Journey", () => {
           setTimeout(() => this.onload?.(), 100);
         }),
         status: 200,
-        responseText: JSON.stringify({ IpfsHash: "QmProgressHash" }),
+        responseText: JSON.stringify({ cid: "QmProgressHash" }),
       };
 
       global.XMLHttpRequest = jest.fn(() => mockXhr) as any;
 
-      render(<VideoUploadCard />);
+      render(<VideoUploadCard tradeId="trade-1" />);
 
       const input = document.querySelector('input[type="file"]');
 

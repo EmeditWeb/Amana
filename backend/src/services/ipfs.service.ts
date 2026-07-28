@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import { Readable } from "stream";
 import crypto from "crypto";
 import axios from "axios";
@@ -20,7 +21,7 @@ export interface PinVerificationResult {
   error?: string;
 }
 
-export class ServiceUnavailableError extends Error {
+export class ServiceUnavailableError extends HttpError {
     status = 503;
     constructor(message = "IPFS service unavailable. Please retry shortly.") {
         super(message);

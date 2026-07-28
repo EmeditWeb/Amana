@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import crypto from "crypto";
 import { Prisma, PrismaClient, Trade, TradeStatus, DisputeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -58,7 +59,7 @@ export class TradeAccessDeniedError extends Error {
   }
 }
 
-export class DisputeTradeStatusError extends Error {
+export class DisputeTradeStatusError extends HttpError {
   status = 400;
   constructor(status: string) {
     super(`Trade must be in FUNDED or DELIVERED status to initiate a dispute (current: ${status})`);
@@ -66,7 +67,7 @@ export class DisputeTradeStatusError extends Error {
   }
 }
 
-export class DisputeCategoryValidationError extends Error {
+export class DisputeCategoryValidationError extends HttpError {
   status = 400;
 
   constructor(category: string | number) {

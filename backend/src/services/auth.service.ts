@@ -65,7 +65,7 @@ export class AuthService {
           const key = `${CHALLENGE_PREFIX}${walletAddress.toLowerCase()}`;
           // Atomic get-and-delete prevents replay: a concurrent request that calls
           // getdel after us will receive null even before we finish verification.
-          const challenge = await (redis as any).getdel(key);
+          const challenge = await redis.getdel(key);
 
           if (!challenge) {
             throw new AppError(ErrorCode.AUTH_ERROR, 'Challenge expired or invalid. Request new challenge.', 401);

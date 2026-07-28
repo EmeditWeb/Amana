@@ -1,8 +1,9 @@
+import { HttpError } from "../errors/httpError";
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
 import { ContractService } from "./contract.service";
 
-export class TradeTemplateNotFoundError extends Error {
+export class TradeTemplateNotFoundError extends HttpError {
   status = 404;
   constructor() {
     super("Trade template not found");

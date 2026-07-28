@@ -1,9 +1,10 @@
+import { HttpError } from "../errors/httpError";
 import { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
 import { EncryptionService } from "./encryption.service";
 
-export class TradeNoteAccessDeniedError extends Error {
+export class TradeNoteAccessDeniedError extends HttpError {
   status = 403;
   constructor() {
     super("Access denied: you are not allowed to view notes for this trade");
@@ -11,7 +12,7 @@ export class TradeNoteAccessDeniedError extends Error {
   }
 }
 
-export class TradeNoteNotFoundError extends Error {
+export class TradeNoteNotFoundError extends HttpError {
   status = 404;
   constructor() {
     super("Trade not found");

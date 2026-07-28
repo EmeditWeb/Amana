@@ -45,6 +45,7 @@ jest.mock("@/lib/api", () => ({
       challenge: jest.fn(),
       verify: jest.fn(),
       logout: jest.fn(),
+      refresh: jest.fn(),
     },
   },
   ApiError: class ApiError extends Error {
@@ -62,6 +63,7 @@ jest.mock("@/lib/api", () => ({
 const mockedChallenge = api.auth.challenge as jest.MockedFunction<typeof api.auth.challenge>;
 const mockedVerify = api.auth.verify as jest.MockedFunction<typeof api.auth.verify>;
 const mockedLogout = api.auth.logout as jest.MockedFunction<typeof api.auth.logout>;
+const mockedRefresh = api.auth.refresh as jest.MockedFunction<typeof api.auth.refresh>;
 
 // ── Freighter response builders ───────────────────────────────────────────────
 type IsConnectedResponse = Awaited<ReturnType<typeof isConnected>>;
@@ -105,6 +107,22 @@ const JWT_TOKEN =
     })
   ).replace(/=/g, "") +
   ".mock-signature";
+
+function makeToken(expiresInSeconds: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  return (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+    btoa(
+      JSON.stringify({
+        sub: WALLET_ADDRESS.toLowerCase(),
+        walletAddress: WALLET_ADDRESS.toLowerCase(),
+        iat: now,
+        exp: now + expiresInSeconds,
+      })
+    ).replace(/=/g, "") +
+    ".mock-signature"
+  );
+}
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -481,5 +499,57 @@ describe("Session restoration", () => {
 
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.token).toBeNull();
+  });
+});
+
+describe("JWT refresh before expiry", () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ advanceTimers: true });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("refreshes the token shortly before it expires and updates storage", async () => {
+    const nearExpiryToken = makeToken(65); // inside the 60s refresh buffer window
+    const refreshedToken = makeToken(86400);
+    sessionStorage.setItem("amana_jwt", nearExpiryToken);
+    mockWalletConnected();
+    mockedRefresh.mockResolvedValue({ token: refreshedToken });
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.token).toBe(nearExpiryToken);
+
+    await act(async () => {
+      jest.advanceTimersByTime(6000);
+    });
+
+    await waitFor(() => expect(result.current.token).toBe(refreshedToken));
+    expect(mockedRefresh).toHaveBeenCalledWith(nearExpiryToken);
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(sessionStorage.getItem("amana_jwt")).toBe(refreshedToken);
+  });
+
+  it("logs the user out when refresh fails", async () => {
+    const nearExpiryToken = makeToken(65);
+    sessionStorage.setItem("amana_jwt", nearExpiryToken);
+    mockWalletConnected();
+    mockedRefresh.mockRejectedValue(
+      new ApiError(401, "Token refresh failed")
+    );
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      jest.advanceTimersByTime(6000);
+    });
+
+    await waitFor(() => expect(result.current.isAuthenticated).toBe(false));
+    expect(result.current.token).toBeNull();
+    expect(result.current.error).toBe("Token refresh failed");
+    expect(sessionStorage.getItem("amana_jwt")).toBeNull();
   });
 });
