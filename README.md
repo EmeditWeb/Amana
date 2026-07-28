@@ -39,27 +39,41 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 - `mobile/` → React Native Expo environment (mobile wallet, notification, and trade UX)
 - `contracts/` → Rust/Soroban smart contract environment
 
+### Prerequisites
+
+Amana uses **pnpm** as the package manager. Install it globally:
+
+```bash
+npm install -g pnpm
+```
+
 ### Frontend setup
 
-1. `cd frontend`
-2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm run dev`
+```bash
+cd frontend
+cp .env.example .env.local
+pnpm install
+pnpm run dev
+```
 
 ### Backend setup
 
-1. `cd backend`
-2. `cp .env.example .env`
-3. `cp .env.tracing.example .env.tracing` (for distributed tracing configuration)
-4. `npm install`
-5. `npm run dev`
+```bash
+cd backend
+cp .env.example .env
+cp .env.tracing.example .env.tracing  # for distributed tracing configuration
+pnpm install
+pnpm run dev
+```
 
 ### Mobile setup
 
-1. `cd mobile`
-2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm start`
+```bash
+cd mobile
+cp .env.example .env.local
+pnpm install
+pnpm start
+```
 
 ### Backend API docs
 
@@ -80,14 +94,9 @@ The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-pro
 
 Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
 
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobil
-Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
-
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobile/`
+- **Frontend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm run build`, `pnpm test` in `frontend/`
+- **Backend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run build`, `pnpm test` in `backend/`
+- **Mobile Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run type-check`, `pnpm run lint` in `mobile/`
 - **Contracts Required Gate**: `cargo test` in `contracts/amana_escrow/`
 
 Path-aware execution is enabled to avoid unnecessary runtime. If a stack has no changed files, the gate reports a skip-note and passes.
