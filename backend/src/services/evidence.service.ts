@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -5,7 +6,7 @@ import { IPFSService, ServiceUnavailableError } from "./ipfs.service";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
 import { env } from "../config/env";
 
-export class EvidenceAccessDeniedError extends Error {
+export class EvidenceAccessDeniedError extends HttpError {
     status = 403;
     constructor() {
         super("Access denied: you are not a party to this trade");
@@ -13,7 +14,7 @@ export class EvidenceAccessDeniedError extends Error {
     }
 }
 
-export class EvidenceTradeNotFoundError extends Error {
+export class EvidenceTradeNotFoundError extends HttpError {
     status = 404;
     constructor() {
         super("Trade not found");
@@ -21,7 +22,7 @@ export class EvidenceTradeNotFoundError extends Error {
     }
 }
 
-export class EvidenceValidationError extends Error {
+export class EvidenceValidationError extends HttpError {
     status = 400;
     constructor(message = "Invalid evidence file") {
         super(message);
@@ -29,7 +30,7 @@ export class EvidenceValidationError extends Error {
     }
 }
 
-export class EvidenceScanError extends Error {
+export class EvidenceScanError extends HttpError {
     status = 503;
     constructor(message = "Evidence scan service unavailable") {
         super(message);

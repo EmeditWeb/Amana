@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
 import { getAdminAllowlistLowercase } from "../lib/accessControl";
@@ -5,7 +6,7 @@ import { IPFSService } from "./ipfs.service";
 
 export type DisputeEvidenceType = "video" | "manifest";
 
-export class DisputeEvidenceTradeNotFoundError extends Error {
+export class DisputeEvidenceTradeNotFoundError extends HttpError {
   status = 404;
   constructor() {
     super("Trade not found");
@@ -13,7 +14,7 @@ export class DisputeEvidenceTradeNotFoundError extends Error {
   }
 }
 
-export class DisputeEvidenceAccessDeniedError extends Error {
+export class DisputeEvidenceAccessDeniedError extends HttpError {
   status = 403;
   constructor() {
     super("Access denied: you are not allowed to view this dispute evidence");
@@ -21,7 +22,7 @@ export class DisputeEvidenceAccessDeniedError extends Error {
   }
 }
 
-export class TradeNotDisputedError extends Error {
+export class TradeNotDisputedError extends HttpError {
   status = 409;
   constructor() {
     super("Evidence is available only for disputed trades");

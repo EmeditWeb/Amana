@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -39,7 +40,7 @@ export interface CanonicalAuditPayload {
     }>;
 }
 
-export class AuditTrailAccessDeniedError extends Error {
+export class AuditTrailAccessDeniedError extends HttpError {
     status = 403;
     constructor() {
         super("Access denied: you are not a party to this trade");
@@ -47,7 +48,7 @@ export class AuditTrailAccessDeniedError extends Error {
     }
 }
 
-export class AuditTrailTradeNotFoundError extends Error {
+export class AuditTrailTradeNotFoundError extends HttpError {
     status = 404;
     constructor() {
         super("Trade not found");
@@ -55,7 +56,7 @@ export class AuditTrailTradeNotFoundError extends Error {
     }
 }
 
-export class AuditSigningConfigError extends Error {
+export class AuditSigningConfigError extends HttpError {
     status = 500;
     constructor(message = "Audit signing configuration is invalid") {
         super(message);
