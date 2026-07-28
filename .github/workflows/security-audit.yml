@@ -1,0 +1,77 @@
+name: Security Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # Every Monday at 6:00 UTC
+
+jobs:
+  audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit frontend dependencies
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit backend dependencies
+        run: |
+          cd backend
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit mobile dependencies
+        run: |
+          cd mobile
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Audit Rust dependencies
+        run: cargo audit
+        working-directory: contracts
+        continue-on-error: true
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: |
+            frontend/audit-report.json
+            backend/audit-report.json
+            mobile/audit-report.json
+          retention-days: 30

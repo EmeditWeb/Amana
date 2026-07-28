@@ -4109,6 +4109,189 @@ mod test {
         // Buyer can no longer cancel - already Cancelled
         client.cancel_trade(&trade_id, &buyer);
     }
+
+    // -----------------------------------------------------------------------
+    // Deadline edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    #[should_panic(expected = "Deadline must be in the future")]
+    fn test_create_trade_rejects_past_deadline() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(EscrowContract, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let seller = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let usdc_id = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        client.initialize(&admin, &usdc_id, &treasury, &100, &usdc_id);
+
+        env.ledger().with_mut(|li| li.timestamp = 5000);
+        client.create_trade(&buyer, &seller, &1000_i128, &5000_u32, &5000_u32, &Some(1000));
+    }
+
+    #[test]
+    #[should_panic(expected = "Amount must be greater than 0")]
+    fn test_create_trade_rejects_zero_amount() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(EscrowContract, ());
+        let client = EscrowContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let seller = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let usdc_id = env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address();
+        client.initialize(&admin, &usdc_id, &treasury, &100, &usdc_id);
+        client.create_trade(&buyer, &seller, &0_i128, &5000_u32, &5000_u32, &None);
+    }
+
+    #[test]
+    #[should_panic(expected = "New deadline must be in the future")]
+    fn test_extend_deadline_rejects_past_new_deadline() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, _usdc_id, _buyer, _seller, _treasury, trade_id) =
+            setup_funded_trade(&env, 5000_i128, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+        env.ledger().with_mut(|li| li.timestamp = 3000);
+        client.extend_deadline(&trade_id, &2500);
+    }
+
+    #[test]
+    fn test_claim_expiry_refund_at_exact_deadline_boundary() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let amount = 5000_i128;
+        let (contract_id, usdc_id, buyer, seller, _treasury, trade_id) =
+            setup_funded_trade(&env, amount, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        env.ledger().with_mut(|li| li.timestamp = 1000);
+        client.extend_deadline(&trade_id, &5000);
+        env.ledger().with_mut(|li| li.timestamp = 5000);
+
+        let token = token::Client::new(&env, &usdc_id);
+        let buyer_balance_before = token.balance(&buyer);
+
+        client.claim_expiry_refund(&trade_id, &buyer);
+
+        assert_eq!(token.balance(&buyer), buyer_balance_before + amount);
+        assert!(matches!(
+            client.get_trade(&trade_id).status,
+            TradeStatus::Cancelled
+        ));
+    }
+
+    // -----------------------------------------------------------------------
+    // Loss ratio edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_resolve_dispute_with_zero_seller_loss_bps() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let amount = 10000_i128;
+        let (contract_id, usdc_id, buyer, seller, treasury, trade_id) =
+            setup_disputed_trade(&env, amount, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let mediator = Address::generate(&env);
+        client.set_mediator(&mediator);
+        client.resolve_dispute(&trade_id, &mediator, &0_u32);
+        let token = token::Client::new(&env, &usdc_id);
+
+        let expected_fee = amount * 100 / 10000;
+        assert_eq!(token.balance(&buyer), amount - expected_fee);
+        assert_eq!(token.balance(&seller), 0);
+    }
+
+    #[test]
+    fn test_resolve_dispute_with_full_seller_loss_bps() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let amount = 10000_i128;
+        let (contract_id, usdc_id, buyer, seller, treasury, trade_id) =
+            setup_disputed_trade(&env, amount, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let mediator = Address::generate(&env);
+        client.set_mediator(&mediator);
+        client.resolve_dispute(&trade_id, &mediator, &10000_u32);
+        let token = token::Client::new(&env, &usdc_id);
+
+        let expected_fee = amount * 100 / 10000;
+        assert_eq!(token.balance(&seller), amount - expected_fee);
+        assert_eq!(token.balance(&buyer), 0);
+    }
+
+    #[test]
+    fn test_loss_ratio_conservation_invariant_extended() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let amount = 50000_i128;
+        let (contract_id, usdc_id, _buyer, _seller, _treasury, trade_id) =
+            setup_disputed_trade(&env, amount, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let mediator = Address::generate(&env);
+        client.set_mediator(&mediator);
+        client.resolve_dispute(&trade_id, &mediator, &3333_u32);
+        let token = token::Client::new(&env, &usdc_id);
+
+        let contract_balance = token.balance(&client.address);
+        let expected_fee = amount * 100 / 10000;
+        assert_eq!(contract_balance, amount - expected_fee);
+    }
+
+    // -----------------------------------------------------------------------
+    // Upgrade path edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_upgrade_during_dispute_preserves_evidence() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let amount = 10000_i128;
+        let (contract_id, usdc_id, buyer, seller, treasury, trade_id) =
+            setup_disputed_trade(&env, amount, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let reason = soroban_sdk::String::from_str(&env, "QmEvidenceBeforeUpgrade");
+        client.submit_evidence(&trade_id, &buyer, &reason, &reason);
+
+        // Upgrade contract
+        env.register_at(&contract_id, EscrowContract, ());
+        let upgraded_client = EscrowContractClient::new(&env, &contract_id);
+
+        let evidence_list = upgraded_client.get_evidence_list(&trade_id);
+        assert_eq!(evidence_list.len(), 1);
+        assert_eq!(evidence_list.get(0).unwrap().ipfs_hash, reason);
+    }
+
+    #[test]
+    fn test_upgrade_during_active_trade_preserves_mediator() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, _usdc_id, _buyer, _seller, _treasury, trade_id) =
+            setup_funded_trade(&env, 5000_i128, 100);
+        let client = EscrowContractClient::new(&env, &contract_id);
+
+        let mediator = Address::generate(&env);
+        client.add_mediator(&mediator);
+
+        // Upgrade contract
+        env.register_at(&contract_id, EscrowContract, ());
+        let upgraded_client = EscrowContractClient::new(&env, &contract_id);
+
+        assert!(upgraded_client.is_mediator(&mediator));
+    }
 }
 
 // ---------------------------------------------------------------------------
