@@ -1,19 +1,18 @@
 import { Worker, Job } from "bullmq";
-import { appLogger } from "../../middleware/logger";
 import { createQueueConnection, EvidenceVerificationJobData } from "../queue";
 import {
   EvidenceVerificationService,
 } from "../../services/evidence.verification.service";
+import { getJobContextualLogger } from "../../lib/logging";
 
 export function createEvidenceVerificationWorker(): Worker<EvidenceVerificationJobData> {
   return new Worker<EvidenceVerificationJobData>(
     "evidence-verification",
     async (job: Job<EvidenceVerificationJobData>) => {
       const { triggeredBy, repairMissing } = job.data;
-      appLogger.info(
-        { jobId: job.id, triggeredBy, repairMissing },
-        "Processing evidence verification job",
-      );
+      const logger = getJobContextualLogger(job.id, undefined, { triggeredBy, repairMissing });
+
+      logger.info("Processing evidence verification job");
 
       const verificationService = new EvidenceVerificationService();
       const report = await verificationService.verifyAll();
@@ -23,25 +22,18 @@ export function createEvidenceVerificationWorker(): Worker<EvidenceVerificationJ
       > | null = null;
 
       if (repairMissing && report.missingPins.length > 0) {
-        appLogger.info(
-          { missingCount: report.missingPins.length, jobId: job.id },
-          "Attempting repair of missing pins",
-        );
+        logger.info({ missingCount: report.missingPins.length }, "Attempting repair of missing pins");
         repairResults = await verificationService.repairMissingPins(
           report.missingPins,
         );
 
         const repaired = repairResults.filter((r) => r.success).length;
         const failed = repairResults.filter((r) => !r.success).length;
-        appLogger.info(
-          { repaired, failed, jobId: job.id },
-          "Repair pass complete",
-        );
+        logger.info({ repaired, failed }, "Repair pass complete");
       }
 
-      appLogger.info(
+      logger.info(
         {
-          jobId: job.id,
           totalChecked: report.totalChecked,
           pinned: report.pinnedCount,
           missing: report.missingCount,

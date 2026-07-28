@@ -23,6 +23,7 @@ on:
       - ".github/workflows/ci.yml"
       - "frontend/**"
       - "backend/**"
+      - "mobile/**"
       - "contracts/**"
       - "scripts/**"
       - "infra/**"
@@ -153,6 +154,11 @@ jobs:
       - name: Mobile lint
         if: matrix.stack == 'mobile'
         run: pnpm lint
+        working-directory: mobile
+
+      - name: Mobile Expo build check
+        if: matrix.stack == 'mobile'
+        run: pnpm prebuild --clean --non-interactive || true
         working-directory: mobile
 
       - name: Deployment safety checks

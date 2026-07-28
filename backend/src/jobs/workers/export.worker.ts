@@ -1,8 +1,8 @@
 import { Worker, Job } from 'bullmq';
-import { appLogger } from '../../middleware/logger';
 import { createQueueConnection, ExportJobData } from '../queue';
 import { prisma } from '../../lib/db';
 import { Parser as CsvParser } from 'json2csv';
+import { getJobContextualLogger } from '../../lib/logging';
 
 export interface ExportResult {
   format: 'csv' | 'json';
@@ -17,7 +17,8 @@ async function uploadToS3(_data: string, key: string): Promise<string | undefine
   // S3 upload requires @aws-sdk/client-s3 and AWS credentials in env.
   // Install the SDK and set AWS_S3_BUCKET, AWS_REGION, AWS_ACCESS_KEY_ID,
   // AWS_SECRET_ACCESS_KEY to enable actual uploads.
-  appLogger.warn({ key, bucket }, 'S3 upload skipped — install @aws-sdk/client-s3 to enable');
+  const logger = getJobContextualLogger(undefined, undefined, { key, bucket });
+  logger.warn('S3 upload skipped — install @aws-sdk/client-s3 to enable');
   return undefined;
 }
 
@@ -27,7 +28,8 @@ export function createExportWorker(): Worker<ExportJobData> {
     async (job: Job<ExportJobData>): Promise<ExportResult> => {
       const { requestedBy, format, tradeIds, filters } = job.data;
       void filters;
-      appLogger.info({ jobId: job.id, requestedBy, format }, 'Processing export job');
+      const logger = getJobContextualLogger(job.id, undefined, { requestedBy, format });
+      logger.info('Processing export job');
 
       const where: Record<string, unknown> = { ...filters };
       if (tradeIds?.length) {
@@ -47,8 +49,8 @@ export function createExportWorker(): Worker<ExportJobData> {
       const s3Key = `exports/${requestedBy}/${job.id}.${format}`;
       const s3Uri = await uploadToS3(data, s3Key);
 
-      appLogger.info(
-        { jobId: job.id, rowCount: trades.length, s3Uri },
+      logger.info(
+        { rowCount: trades.length, s3Uri },
         'Export job completed',
       );
 
