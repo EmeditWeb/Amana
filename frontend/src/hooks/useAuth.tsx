@@ -261,7 +261,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!state.token) return;
 
-    const payload = JSON.parse(atob(state.token.split(".")[1]));
+    let payload: { exp?: number };
+    try {
+      payload = JSON.parse(atob(state.token.split(".")[1]));
+    } catch {
+      return;
+    }
     const exp = payload.exp;
     if (!exp) return;
 
@@ -277,15 +282,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const refreshBuffer = 60 * 1000;
+    const currentToken = state.token;
     const timeout = setTimeout(() => {
-      clearStoredToken();
-      setState((prev) => ({
-        ...prev,
-        token: null,
-        isAuthenticated: false,
-        error: "Session expired. Please authenticate again.",
-      }));
-    }, expiresIn - refreshBuffer);
+      void (async () => {
+        try {
+          const { token: newToken } = await api.auth.refresh(currentToken);
+          setStoredToken(newToken);
+          setState((prev) => ({
+            ...prev,
+            token: newToken,
+            isAuthenticated: true,
+          }));
+          trackAuthEvent("refresh_token", "success");
+        } catch (error) {
+          clearStoredToken();
+          const message =
+            error instanceof ApiError || error instanceof Error
+              ? error.message
+              : "Session expired. Please authenticate again.";
+          setState((prev) => ({
+            ...prev,
+            token: null,
+            isAuthenticated: false,
+            error: message,
+          }));
+          trackAuthEvent("refresh_token", "failed", { error: message });
+        }
+      })();
+    }, Math.max(expiresIn - refreshBuffer, 0));
 
     return () => clearTimeout(timeout);
   }, [state.token]);

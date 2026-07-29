@@ -46,10 +46,13 @@ export const navigationHelpers = {
 function createHeaders(
   headers?: HeadersInit,
   token?: string | null,
+  skipDefaultContentType = false,
 ): Record<string, string> {
-  const resolvedHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const resolvedHeaders: Record<string, string> = skipDefaultContentType
+    ? {}
+    : {
+        "Content-Type": "application/json",
+      };
 
   if (headers instanceof Headers) {
     headers.forEach((value, key) => {
@@ -120,7 +123,11 @@ export async function request<T>(
   try {
     const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...fetchOptions,
-      headers: createHeaders(headers, authToken),
+      headers: createHeaders(
+        headers,
+        authToken,
+        fetchOptions.body instanceof FormData,
+      ),
       signal: controller.signal,
     });
 

@@ -1,7 +1,8 @@
+import { HttpError } from "../errors/httpError";
 import { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
 
-export class WatchTradeNotFoundError extends Error {
+export class WatchTradeNotFoundError extends HttpError {
   status = 404;
   constructor() {
     super("Trade not found");
@@ -9,7 +10,7 @@ export class WatchTradeNotFoundError extends Error {
   }
 }
 
-export class WatchTradeAccessDeniedError extends Error {
+export class WatchTradeAccessDeniedError extends HttpError {
   status = 403;
   constructor() {
     super("Forbidden");

@@ -1,6 +1,7 @@
 import { authApi } from "./api/auth";
 import { ApiError } from "./api/client";
 import { disputesApi } from "./api/disputes";
+import { evidenceApi } from "./api/evidence";
 import { getApiBaseUrl, getStellarNetworkPassphrase, getStellarRpcUrl } from "./api/env";
 import { reputationApi } from "./api/reputation";
 import { searchApi } from "./api/search";
@@ -25,12 +26,17 @@ export type {
   TradeListResponse,
   TradeResponse,
   TradeStatsResponse,
+  TrustScoreBreakdown,
+  TrustScoreDetails,
+  TrustScoreEvent,
+  TrustTier,
   VerifyResponse,
 } from "./api/types";
 
 export const api = {
   auth: authApi,
   disputes: disputesApi,
+  evidence: evidenceApi,
   reputation: reputationApi,
   search: searchApi,
   trades: tradesApi,

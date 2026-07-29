@@ -1,5 +1,9 @@
 name: Staging Deploy
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   workflow_dispatch:
   push:
@@ -54,10 +58,12 @@ jobs:
         run: |
           cp .env.staging.example .env.staging
           cat >> .env.staging <<'EOF'
-          STAGING_POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD || 'staging-password' }}
-          STAGING_REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD || 'staging-redis-pass' }}
-          STAGING_DATABASE_URL=${{ secrets.STAGING_DATABASE_URL || 'postgresql://postgres:staging-password@localhost:5434/amana_staging' }}
-          JWT_SECRET=${{ secrets.STAGING_JWT_SECRET || 'ci-staging-jwt-secret-placeholder-minimum-32' }}
+          STAGING_POSTGRES_PASSWORD=${{ secrets.STAGING_POSTGRES_PASSWORD }}
+          STAGING_REDIS_PASSWORD=${{ secrets.STAGING_REDIS_PASSWORD }}
+          STAGING_DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
+          DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
+          JWT_SECRET=${{ secrets.STAGING_JWT_SECRET }}
+          TRADE_NOTES_ENCRYPTION_KEY=${{ secrets.STAGING_TRADE_NOTES_ENCRYPTION_KEY }}
           EOF
 
       - name: Install backend dependencies

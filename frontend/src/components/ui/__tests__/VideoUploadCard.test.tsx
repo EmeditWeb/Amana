@@ -2,6 +2,11 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VideoUploadCard } from '../VideoUploadCard';
 
+// Mock useAuth to provide a JWT without requiring an AuthProvider wrapper
+jest.mock('@/hooks/useAuth', () => ({
+    useAuth: () => ({ token: 'mock-jwt-token' }),
+}));
+
 // Mock the BentoCard component
 jest.mock('../BentoCard', () => ({
     BentoCard: ({ children, title, glowVariant, className }: { children: React.ReactNode, title?: string, icon?: React.ReactNode, glowVariant?: string, className?: string }) => (
@@ -30,7 +35,7 @@ const mockXhr: Record<string, unknown> = {
     setRequestHeader: jest.fn(),
     send: jest.fn(),
     status: 200,
-    responseText: JSON.stringify({ IpfsHash: 'QmTest123' }),
+    responseText: JSON.stringify({ cid: 'QmTest123' }),
     statusText: 'OK',
 };
 
@@ -38,6 +43,7 @@ global.XMLHttpRequest = jest.fn(() => mockXhr) as unknown as typeof XMLHttpReque
 
 describe('VideoUploadCard Component', () => {
     const defaultProps = {
+        tradeId: 'trade-1',
         onUpload: jest.fn(),
     };
 
@@ -47,7 +53,7 @@ describe('VideoUploadCard Component', () => {
         mockXhr.onload = null;
         mockXhr.onerror = null;
         mockXhr.status = 200;
-        mockXhr.responseText = JSON.stringify({ IpfsHash: 'QmTest123' });
+        mockXhr.responseText = JSON.stringify({ cid: 'QmTest123' });
     });
 
     it('renders without crashing with all props', () => {
@@ -176,7 +182,7 @@ describe('VideoUploadCard Component', () => {
 
     it('calls onUpload callback after successful upload', async () => {
         const onUpload = jest.fn();
-        render(<VideoUploadCard onUpload={onUpload} />);
+        render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload} />);
 
         const file = new File(['test'], 'test.mp4', { type: 'video/mp4' });
         const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;

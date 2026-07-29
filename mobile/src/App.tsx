@@ -10,7 +10,7 @@ import {
   registerForPushNotifications,
   storePushTokenOnBackend,
   setupNotificationListeners,
-  checkNotificationPermissions,
+  getNotificationOptInPreference,
 } from './services/notification.service';
 import type { RootStackParamList } from './types/navigation';
 import { AppNavigator } from './navigation/AppNavigator';
@@ -29,9 +29,14 @@ export default function App() {
     if (!token) return;
 
     const setupNotifications = async () => {
-      const hasPermission = await checkNotificationPermissions();
-      if (!hasPermission) return;
+      // Respect a prior in-app opt-out: don't re-prompt or re-register on
+      // every launch once the user has explicitly declined.
+      const preference = await getNotificationOptInPreference();
+      if (preference === 'denied') return;
 
+      // For a first-time user (preference === 'unset') this triggers the
+      // native permission prompt; for a returning user who already granted
+      // permission it resolves immediately with the existing token.
       const pushToken = await registerForPushNotifications();
       if (pushToken) {
         await storePushTokenOnBackend(pushToken, token);

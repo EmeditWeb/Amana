@@ -123,6 +123,18 @@ export const envSchema = z.object({
   RATE_LIMIT_USER_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_DISPUTE_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
   RATE_LIMIT_DISPUTE_MAX: z.coerce.number().int().positive().default(5),
+
+  // Trust Score configuration
+  TRUST_SCORE_DECAY_HALF_LIFE_DAYS: z.coerce.number().int().positive().default(90),
+  TRUST_SCORE_RECALCULATION_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+
+  // Trade notes encryption (AES-256-GCM) — dedicated key, NOT derived from JWT_SECRET
+  // Validated as critical at startup via envValidator; optional here so existing configs don't break.
+  TRADE_NOTES_ENCRYPTION_KEY: z
+    .string()
+    .min(32)
+    .optional()
+    .describe('Base64-encoded 32-byte key for AES-256-GCM trade note encryption'),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -137,6 +149,7 @@ function buildProcessEnv(): Record<string, string | undefined> {
     processEnv.USDC_CONTRACT_ID ||= 'test-usdc-contract';
     processEnv.PINATA_API_KEY ||= 'test-pinata-api-key';
     processEnv.PINATA_SECRET ||= 'test-pinata-secret';
+    processEnv.TRADE_NOTES_ENCRYPTION_KEY ||= 'test-trade-notes-encryption-key-base64-32chr';
   }
 
   return processEnv;

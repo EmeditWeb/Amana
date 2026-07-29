@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import crypto from "crypto";
 import { Prisma, PrismaClient, Trade, TradeStatus, DisputeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -58,7 +59,7 @@ export class TradeAccessDeniedError extends Error {
   }
 }
 
-export class DisputeTradeStatusError extends Error {
+export class DisputeTradeStatusError extends HttpError {
   status = 400;
   constructor(status: string) {
     super(`Trade must be in FUNDED or DELIVERED status to initiate a dispute (current: ${status})`);
@@ -66,7 +67,7 @@ export class DisputeTradeStatusError extends Error {
   }
 }
 
-export class DisputeCategoryValidationError extends Error {
+export class DisputeCategoryValidationError extends HttpError {
   status = 400;
 
   constructor(category: string | number) {
@@ -82,26 +83,32 @@ export class TradeService {
   ) { }
 
   async createPendingTrade(input: CreatePendingTradeInput): Promise<Trade> {
-    appLogger.info({
-      requestId: undefined, // Will be filled by context if available
-      userId: sanitizeLogField(input.buyerAddress),
-      paymentId: sanitizeLogField(input.tradeId),
-      provider: "stellar",
-      status: "authorization_started",
-      timestamp: new Date().toISOString()
-    }, "Payment authorization started");
+    return TracingHelper.withSpan(
+      "trade.create_pending",
+      async () => {
+        appLogger.info({
+          requestId: undefined, // Will be filled by context if available
+          userId: sanitizeLogField(input.buyerAddress),
+          paymentId: sanitizeLogField(input.tradeId),
+          provider: "stellar",
+          status: "authorization_started",
+          timestamp: new Date().toISOString()
+        }, "Payment authorization started");
 
-    TracingHelper.addEvent("authorization_started", {
-      paymentId: sanitizeLogField(input.tradeId),
-      userId: sanitizeLogField(input.buyerAddress)
-    });
+        TracingHelper.addEvent("authorization_started", {
+          paymentId: sanitizeLogField(input.tradeId),
+          userId: sanitizeLogField(input.buyerAddress)
+        });
 
-    return this.prisma.trade.create({
-      data: {
-        ...input,
-        status: TradeStatus.PENDING_SIGNATURE,
+        return this.prisma.trade.create({
+          data: {
+            ...input,
+            status: TradeStatus.PENDING_SIGNATURE,
+          },
+        });
       },
-    });
+      { attributes: { "trade.id": sanitizeLogField(input.tradeId), "trade.status": TradeStatus.PENDING_SIGNATURE } },
+    );
   }
 
   async listUserTrades(address: string, filters: TradeListFilters) {
@@ -282,46 +289,58 @@ export class TradeService {
     category: string,
     categoryId?: number,
   ) {
-    const trade = await this.getTradeById(id, callerAddress);
-    if (!trade) {
-      throw new Error("Trade not found");
-    }
+    return TracingHelper.withSpan(
+      "dispute.initiate",
+      async (span) => {
+        const trade = await this.getTradeById(id, callerAddress);
+        if (!trade) {
+          throw new Error("Trade not found");
+        }
 
-    // Access check is already done by getTradeById, but let's be explicit
-    if (trade.buyerAddress !== callerAddress && trade.sellerAddress !== callerAddress) {
-      throw new TradeAccessDeniedError();
-    }
+        // Access check is already done by getTradeById, but let's be explicit
+        if (trade.buyerAddress !== callerAddress && trade.sellerAddress !== callerAddress) {
+          throw new TradeAccessDeniedError();
+        }
 
-    // Check status: FUNDED or DELIVERED
-    if (trade.status !== TradeStatus.FUNDED && trade.status !== TradeStatus.DELIVERED) {
-      throw new DisputeTradeStatusError(trade.status);
-    }
+        // Check status: FUNDED or DELIVERED
+        if (trade.status !== TradeStatus.FUNDED && trade.status !== TradeStatus.DELIVERED) {
+          throw new DisputeTradeStatusError(trade.status);
+        }
 
-    const resolvedCategoryId = await this.resolveDisputeCategoryId(category, categoryId);
-    const reasonHash = sha256(reason);
+        const resolvedCategoryId = await this.resolveDisputeCategoryId(category, categoryId);
+        const reasonHash = sha256(reason);
 
-    // Build contract transaction
-    // Note: getTradeById handles both numeric and string IDs for local lookup,
-    // but the contract needs the tradeId (the blockchain-sourced one).
-    const { unsignedXdr } = await this.contractService.buildInitiateDisputeTx({
-      tradeId: trade.tradeId,
-      initiatorAddress: callerAddress,
-      reasonHash,
-    });
+        span.setAttributes({
+          "trade.id": sanitizeLogField(trade.tradeId),
+          "trade.status": trade.status,
+          "dispute.category_id": resolvedCategoryId,
+        });
 
-    // Create DB record
-    // We store the plaintext reason for human review.
-    await this.prisma.dispute.create({
-      data: {
-        tradeId: trade.tradeId,
-        initiator: callerAddress,
-        reason,
-        status: DisputeStatus.OPEN,
-        categoryId: resolvedCategoryId,
+        // Build contract transaction
+        // Note: getTradeById handles both numeric and string IDs for local lookup,
+        // but the contract needs the tradeId (the blockchain-sourced one).
+        const { unsignedXdr } = await this.contractService.buildInitiateDisputeTx({
+          tradeId: trade.tradeId,
+          initiatorAddress: callerAddress,
+          reasonHash,
+        });
+
+        // Create DB record
+        // We store the plaintext reason for human review.
+        await this.prisma.dispute.create({
+          data: {
+            tradeId: trade.tradeId,
+            initiator: callerAddress,
+            reason,
+            status: DisputeStatus.OPEN,
+            categoryId: resolvedCategoryId,
+          },
+        });
+
+        return { unsignedXdr };
       },
-    });
-
-    return { unsignedXdr };
+      { attributes: { "trade.id": id } },
+    );
   }
 
   private async resolveDisputeCategoryId(category: string, categoryId?: number): Promise<number> {

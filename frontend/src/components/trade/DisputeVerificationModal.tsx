@@ -180,7 +180,10 @@ export function DisputeVerificationModal({
               {/* Step: Upload */}
               {step === "upload" && (
                 <>
-                  <VideoUploadCard onUpload={(hash) => setIpfsHash(hash)} />
+                  <VideoUploadCard
+                    tradeId={tradeId}
+                    onUpload={(hash) => setIpfsHash(hash)}
+                  />
 
                   <div className="flex gap-3">
                     <button

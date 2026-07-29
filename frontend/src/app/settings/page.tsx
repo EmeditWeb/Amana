@@ -149,9 +149,11 @@ export default function SettingsPage() {
     isWalletConnected,
     isWalletDetected,
     isLoading,
+    error: walletError,
     connectWallet,
     authenticate,
     logout,
+    refreshAuth,
   } = useAuth();
 
   const { t } = useTranslation();
@@ -173,6 +175,9 @@ export default function SettingsPage() {
 
   const [copied, setCopied] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [walletProvider, setWalletProvider] = useState<"freighter" | "albedo">(
+    "freighter",
+  );
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {},
   );
@@ -235,6 +240,14 @@ export default function SettingsPage() {
           ? "Freighter \u2014 permission required"
           : "Freighter not detected";
 
+  const walletRecovery = walletError?.toLowerCase().includes("reject")
+    ? "The request was rejected in your wallet. Retry and approve the connection prompt."
+    : walletError?.toLowerCase().includes("network")
+      ? "Check that your wallet and Amana are using the same Stellar network."
+      : walletError
+        ? "Unlock your wallet, confirm the browser permission, then retry."
+        : null;
+
   return (
     <section className="min-h-full bg-bg-primary px-6 py-8 lg:px-10">
       <div className="max-w-3xl mx-auto space-y-8">
@@ -251,6 +264,31 @@ export default function SettingsPage() {
           title={t("settings.wallet.title")}
           description={t("settings.wallet.description")}
         >
+          <div className="grid gap-3 sm:grid-cols-2" aria-label="Wallet provider">
+            {(["freighter", "albedo"] as const).map((provider) => (
+              <button
+                key={provider}
+                type="button"
+                onClick={() => setWalletProvider(provider)}
+                aria-pressed={walletProvider === provider}
+                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  walletProvider === provider
+                    ? "border-gold bg-gold-muted text-text-primary"
+                    : "border-border-default bg-bg-elevated text-text-secondary hover:border-border-focus"
+                }`}
+              >
+                <span className="block text-sm font-semibold capitalize">
+                  {provider}
+                </span>
+                <span className="mt-1 block text-xs text-text-muted">
+                  {provider === "freighter"
+                    ? "Browser extension with in-app signing"
+                    : "Web wallet for account access and transaction approval"}
+                </span>
+              </button>
+            ))}
+          </div>
+
           <div className="rounded-xl border border-border-default bg-bg-elevated px-4 py-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-widest text-text-muted">
@@ -274,10 +312,21 @@ export default function SettingsPage() {
             </div>
 
             {address ? (
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-sm text-text-primary font-mono break-all">
-                  {address}
-                </code>
+              <div className="space-y-3">
+                <label className="block text-xs uppercase tracking-widest text-text-muted">
+                  Active account
+                  <select
+                    value={address}
+                    onChange={() => void connectWallet()}
+                    className="mt-2 block w-full rounded-lg border border-border-default bg-bg-input px-3 py-2 font-mono text-sm text-text-primary"
+                  >
+                    <option value={address}>{address}</option>
+                  </select>
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-sm text-text-primary font-mono break-all">
+                    {address}
+                  </code>
                 <button
                   type="button"
                   onClick={handleCopyAddress}
@@ -307,21 +356,65 @@ export default function SettingsPage() {
                     </svg>
                   )}
                 </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void connectWallet()}
+                  className="text-xs font-semibold text-gold hover:underline"
+                >
+                  Choose a different Freighter account
+                </button>
               </div>
             ) : (
               <p className="text-sm text-text-muted italic">{walletStatus}</p>
             )}
           </div>
 
+          {walletError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-4 py-3"
+            >
+              <p className="text-sm font-semibold text-status-danger">
+                Wallet connection failed
+              </p>
+              <p className="mt-1 text-sm text-text-secondary">{walletError}</p>
+              {walletRecovery && (
+                <p className="mt-1 text-xs text-text-muted">{walletRecovery}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => void refreshAuth()}
+                className="mt-3 text-xs font-semibold text-status-danger hover:underline"
+              >
+                Recheck connection
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3">
             {!isWalletConnected && (
               <button
                 type="button"
-                onClick={connectWallet}
+                onClick={() => {
+                  if (walletProvider === "freighter") {
+                    void connectWallet();
+                    return;
+                  }
+                  window.open(
+                    "https://albedo.link",
+                    "amana-albedo",
+                    "popup,width=520,height=720",
+                  );
+                }}
                 disabled={isLoading}
                 className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-text-inverse hover:bg-gold-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {isLoading ? t("settings.wallet.connecting") : t("settings.wallet.connectFreighter")}
+                {isLoading
+                  ? t("settings.wallet.connecting")
+                  : walletProvider === "freighter"
+                    ? t("settings.wallet.connectFreighter")
+                    : "Open Albedo"}
               </button>
             )}
             {isWalletConnected && !isAuthenticated && (

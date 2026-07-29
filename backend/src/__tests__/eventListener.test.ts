@@ -613,6 +613,27 @@ describe("EventListenerService", () => {
       expect(set.has(`3:CONTRACT_TEST_123:evt-3`)).toBe(true);
     });
 
+    it("should evict through ledger buckets without sorting the processed Set", async () => {
+      (service as any).config.processedLedgersCacheSize = 2;
+      const sortSpy = vi.spyOn(Array.prototype, "sort");
+
+      for (let i = 1; i <= 3; i++) {
+        const raw = makeRawEvent(i, `bucket-${i}`);
+        (StellarSdk.scValToNative as ReturnType<typeof vi.fn>)
+          .mockReturnValueOnce("TradeFunded")
+          .mockReturnValueOnce(`bucket-trade-${i}`);
+        await service.processEvent(raw as any);
+      }
+
+      const buckets: Map<number, Set<string>> = (service as any)
+        .processedEventsByLedger;
+      expect(sortSpy).not.toHaveBeenCalled();
+      expect([...buckets.keys()]).toEqual([2, 3]);
+      expect((service as any).processedEvents.has(
+        "1:CONTRACT_TEST_123:bucket-1",
+      )).toBe(false);
+    });
+
     it("should not poll when running is false", async () => {
       (service as any).running = false;
       mockGetEvents.mockResolvedValue({ events: [] });

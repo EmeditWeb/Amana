@@ -1,3 +1,4 @@
+import { HttpError } from "../errors/httpError";
 import crypto from "crypto";
 import { PrismaClient, TradeStatus } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
@@ -15,7 +16,7 @@ export interface SubmitManifestInput {
     expectedDeliveryAt: string;
 }
 
-export class ManifestForbiddenError extends Error {
+export class ManifestForbiddenError extends HttpError {
     status = 403;
     constructor() {
         super("Only the seller may submit a delivery manifest");
@@ -23,7 +24,7 @@ export class ManifestForbiddenError extends Error {
     }
 }
 
-export class ManifestAccessDeniedError extends Error {
+export class ManifestAccessDeniedError extends HttpError {
     status = 403;
     constructor() {
         super("Access denied: you are not allowed to view this manifest");
@@ -31,7 +32,7 @@ export class ManifestAccessDeniedError extends Error {
     }
 }
 
-export class ManifestConflictError extends Error {
+export class ManifestConflictError extends HttpError {
     status = 409;
     constructor() {
         super("A manifest has already been submitted for this trade");
@@ -39,7 +40,7 @@ export class ManifestConflictError extends Error {
     }
 }
 
-export class ManifestTradeStatusError extends Error {
+export class ManifestTradeStatusError extends HttpError {
     status = 400;
     constructor(status: string) {
         super(`Trade must be in FUNDED status to submit a manifest (current: ${status})`);
@@ -47,7 +48,7 @@ export class ManifestTradeStatusError extends Error {
     }
 }
 
-export class ManifestTradeNotFoundError extends Error {
+export class ManifestTradeNotFoundError extends HttpError {
     status = 404;
     constructor() {
         super("Trade not found");
@@ -55,7 +56,7 @@ export class ManifestTradeNotFoundError extends Error {
     }
 }
 
-export class ManifestNotFoundError extends Error {
+export class ManifestNotFoundError extends HttpError {
     status = 404;
     constructor() {
         super("Manifest not found");

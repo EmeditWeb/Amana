@@ -39,33 +39,49 @@ To provide a programmable safety net for regional commodity trading. Amana ensur
 - `mobile/` → React Native Expo environment (mobile wallet, notification, and trade UX)
 - `contracts/` → Rust/Soroban smart contract environment
 
+### Prerequisites
+
+Amana uses **pnpm** as the package manager. Install it globally:
+
+```bash
+npm install -g pnpm
+```
+
 ### Frontend setup
 
-1. `cd frontend`
-2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm run dev`
+```bash
+cd frontend
+cp .env.example .env.local
+pnpm install
+pnpm run dev
+```
 
 ### Backend setup
 
-1. `cd backend`
-2. `cp .env.example .env`
-3. `cp .env.tracing.example .env.tracing` (for distributed tracing configuration)
-4. `npm install`
-5. `npm run dev`
+```bash
+cd backend
+cp .env.example .env
+cp .env.tracing.example .env.tracing  # for distributed tracing configuration
+pnpm install
+pnpm run dev
+```
 
 ### Mobile setup
 
-1. `cd mobile`
-2. `cp .env.example .env.local`
-3. `npm install`
-4. `npm start`
+```bash
+cd mobile
+cp .env.example .env.local
+pnpm install
+pnpm start
+```
 
 ### Backend API docs
 
 - Source of truth: `backend/src/docs/openapi.yaml`
 - Dev Swagger UI: `http://localhost:4000/api/docs`
 - JSON export: `http://localhost:4000/api/docs/openapi.json`
+- **API contract examples**: [`backend/docs/api-contract-examples.md`](./backend/docs/api-contract-examples.md) — JS/TypeScript snippets for authentication and all trade operations
+- **SDK usage guide**: [`backend/docs/sdk-usage.md`](./backend/docs/sdk-usage.md) — typed client wrapper for frontend, mobile, and Node.js
 
 The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-production runs so reviewers can inspect either format.
 
@@ -78,14 +94,9 @@ The backend writes `backend/src/docs/openapi.json` from the YAML spec in non-pro
 
 Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
 
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobil
-Amana enforces stack-level CI gates on pull requests through `.github/workflows/ci.yml`.
-
-- **Frontend Required Gate**: `npm ci`, `npm run lint`, `npm run build`, `npm test` in `frontend/`
-- **Backend Required Gate**: `npm ci`, `npm run build`, `npm test` in `backend/`
-- **Mobile Required Gate**: `npm ci`, `npm run type-check`, `npm run lint` in `mobile/`
+- **Frontend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run lint`, `pnpm run build`, `pnpm test` in `frontend/`
+- **Backend Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run build`, `pnpm test` in `backend/`
+- **Mobile Required Gate**: `pnpm install --frozen-lockfile`, `pnpm run type-check`, `pnpm run lint` in `mobile/`
 - **Contracts Required Gate**: `cargo test` in `contracts/amana_escrow/`
 
 Path-aware execution is enabled to avoid unnecessary runtime. If a stack has no changed files, the gate reports a skip-note and passes.
@@ -159,6 +170,19 @@ Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-e
 
 See [DISTRIBUTED_TRACING_GUIDE.md](./DISTRIBUTED_TRACING_GUIDE.md) for detailed setup and usage instructions.
 
+**Application Metrics & Monitoring**:
+- **[Prometheus Metrics](./docs/PROMETHEUS_METRICS.md)** — Trade throughput, dispute counts, and processing latency metrics exposed at `/metrics`
+
+#### System Architecture & Data Flow
+
+- **[System Architecture](./docs/architecture.md)** — High-level architecture overview, component interactions, and deployment topology
+- **[Sequence Diagrams](./docs/sequence-diagrams.md)** — Detailed workflow sequences for trade creation, dispute resolution, audit trails, and more
+- **[Audit Logging](./docs/audit-logging.md)** — Tamper-evident audit trail with cryptographic signatures and verification
+- **[Mediator Dashboard Spec](./docs/mediator-dashboard-spec.md)** — Complete specification for mediator dashboard including user stories, UI mockups, and implementation tasks
+
+**Testing & Quality Assurance**:
+- **[Visual Regression Testing](./docs/VISUAL_REGRESSION_TESTING.md)** — Frontend UI regression tests using Playwright with multi-viewport support
+
 ---
 
 ## 📐 Architecture Decision Records
@@ -175,6 +199,11 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 
 Amana is an open-source project aimed at improving food security and trade efficiency. We welcome developers, designers, and agricultural experts!
 
+**New to the project?** Start with the [Contributor Onboarding Guide](./docs/CONTRIBUTOR_ONBOARDING.md) for setup instructions and development workflows.
+
+**Full guidelines**: See [CONTRIBUTING.md](./CONTRIBUTING.md) for code standards, testing requirements, and PR process.
+
+Quick start:
 1. Fork the Project.
 2. Create your Feature Branch (`git checkout -b feature/NewFeature`).
 3. Commit your Changes (`git commit -m 'Add NewFeature'`).

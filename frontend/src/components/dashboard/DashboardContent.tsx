@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { api, ApiError, TradeResponse, TradeStatsResponse } from "@/lib/api";
@@ -10,18 +10,21 @@ import { SkeletonCard } from "@/components/ui/SkeletonCard";
 import { SkeletonList } from "@/components/ui/SkeletonList";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useOffline } from "@/hooks/useOffline";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { OfflineState } from "@/components/ui/OfflineState";
 
 export function DashboardContent() {
   const { t } = useTranslation();
   const { token, isAuthenticated } = useAuth();
+  const { isOffline, retryOnline } = useOffline();
   
   const [stats, setStats] = useState<TradeStatsResponse | null>(null);
   const [recentTrades, setRecentTrades] = useState<TradeResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchDashboardData() {
+  const fetchDashboardData = useCallback(async () => {
       if (!isAuthenticated || !token) {
         setLoading(false);
         return;
@@ -47,10 +50,11 @@ export function DashboardContent() {
       } finally {
         setLoading(false);
       }
-    }
-
-    fetchDashboardData();
   }, [isAuthenticated, token, t]);
+
+  useEffect(() => {
+    void fetchDashboardData();
+  }, [fetchDashboardData]);
 
   if (!isAuthenticated) {
     return (
@@ -94,19 +98,24 @@ export function DashboardContent() {
     );
   }
 
+  if (isOffline) {
+    return (
+      <OfflineState
+        className="min-h-[60vh]"
+        onRetry={() => void retryOnline().then(fetchDashboardData)}
+      />
+    );
+  }
+
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-status-danger/10 border border-status-danger/40 rounded-lg p-4 text-center">
-          <p className="text-status-danger">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 text-sm font-medium bg-bg-elevated hover:bg-bg-card rounded-md border border-border-default transition-colors"
-          >
-            {t("dashboard.tryAgain")}
-          </button>
-        </div>
-      </div>
+      <ErrorState
+        className="min-h-[60vh]"
+        variant="card"
+        title="Dashboard unavailable"
+        message={error}
+        onRetry={() => void fetchDashboardData()}
+      />
     );
   }
 

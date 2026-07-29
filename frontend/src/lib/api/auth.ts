@@ -19,4 +19,10 @@ export const authApi = {
       method: "POST",
       token,
     }),
+
+  refresh: (token: string) =>
+    request<VerifyResponse>("/auth/refresh", {
+      method: "POST",
+      token,
+    }),
 };

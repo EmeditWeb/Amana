@@ -43,7 +43,12 @@ jest.mock('../../middleware/logger', () => ({
 }));
 
 jest.mock('../../config/tracing', () => ({
-  TracingHelper: { addEvent: jest.fn() },
+  TracingHelper: {
+    addEvent: jest.fn(),
+    withSpan: jest.fn(async (_name: string, fn: (span: unknown) => Promise<unknown>) =>
+      fn({ setAttributes: jest.fn(), setAttribute: jest.fn(), addEvent: jest.fn(), recordException: jest.fn(), setStatus: jest.fn(), end: jest.fn() }),
+    ),
+  },
 }));
 
 // ---------------------------------------------------------------------------

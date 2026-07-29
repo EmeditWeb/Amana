@@ -6,6 +6,7 @@ import { correlationIdMiddleware } from './middleware/correlationId.middleware';
 import { tracingMiddleware } from './middleware/tracing.middleware';
 import loggerMiddleware from './middleware/logger';
 import { requestLoggerMiddleware } from "./middleware/request.logger.middleware";
+import securityHeaders from "./middleware/securityHeaders";
 import { authRoutes } from "./routes/auth.routes";
 import { walletRoutes } from "./routes/wallet.routes";
 import { createTradeRouter } from "./routes/trade.routes";
@@ -25,6 +26,7 @@ import { createHealthRouter } from "./routes/health.routes";
 import { createHealthDetailRouter } from "./routes/health.detail.routes";
 import { createNotificationPreferencesRouter } from "./routes/notifications.preferences.routes";
 import { createNotificationsRouter } from "./routes/notifications.inapp.routes";
+import { createMetricsRouter } from "./routes/metrics.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
@@ -38,8 +40,13 @@ import { stellarAccountCreateRoutes } from "./routes/stellar.account.create";
 import { createContractStateRouter } from "./routes/contract.state.routes";
 import { createAdminFeaturesRouter } from "./routes/admin.features.routes";
 import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-verification.routes";
+import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { env } from "./config/env";
+import { validateEnvironment } from "./config/envValidator";
+
+// Fail fast at boot if required environment variables are missing
+validateEnvironment();
 
 /** Parse the CORS_ORIGINS env var into a usable allowlist.
  *  Value should be a comma-separated list of allowed origins, e.g.:
@@ -76,7 +83,7 @@ export function createApp(): express.Application {
     app.set('trust proxy', 1);
   }
 
-  // Security headers
+  // Security headers – production-grade defaults
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -88,18 +95,32 @@ export function createApp(): express.Application {
           connectSrc: ["'self'"],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
         },
       },
       crossOriginEmbedderPolicy: true,
       crossOriginOpenerPolicy: { policy: 'same-origin' },
       crossOriginResourcePolicy: { policy: 'same-origin' },
-      referrerPolicy: { policy: 'no-referrer' },
-      hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
       noSniff: true,
       frameguard: { action: 'deny' },
       xssFilter: true,
+      hidePoweredBy: true,
+      permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+      dnsPrefetchControl: { allow: false },
+      xDownloadOptions: true,
     })
   );
+
+  // Additional production security headers (layer 2 hardening)
+  app.use(securityHeaders);
 
   // Environment-driven CORS
   app.use(cors(buildCorsOptions()));
@@ -121,10 +142,14 @@ export function createApp(): express.Application {
   app.use("/health", createHealthRouter());
   app.use("/health", createHealthDetailRouter());
 
+  // Prometheus metrics endpoint
+  app.use(createMetricsRouter());
+
   app.use("/auth", authRoutes);
   app.use("/wallet", walletRoutes);
   app.use("/users", userRoutes);
   app.use("/users", reputationRoutes);
+  app.use("/users", createTrustScoreRouter());
   app.use(createNotificationPreferencesRouter());
   app.use(createNotificationsRouter());
 

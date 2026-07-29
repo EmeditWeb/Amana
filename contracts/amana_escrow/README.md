@@ -54,6 +54,24 @@ Before production rollout, execute:
 cargo test
 ```
 
+## Local deployment
+
+`contracts/deploy-local.sh` builds the `amana_escrow` wasm artifact and
+deploys (or upgrades) it against a local Soroban network for manual testing.
+
+```bash
+./contracts/deploy-local.sh \
+  --network standalone \
+  --admin <ADMIN_PUBKEY> \
+  --token-contract <TOKEN_CONTRACT_ID> \
+  --treasury <TREASURY_PUBKEY> \
+  --fee-bps 100
+```
+
+Pass `--upgrade` to upgrade an already-deployed local contract instead of
+deploying a new one, or `--help` for the full option list. The script is a
+thin wrapper around `scripts/deploy-contract-local.sh`.
+
 ## Deployment safety checks
 
 Contract CI runs `scripts/check-contract-deployment-safety.sh` before the test

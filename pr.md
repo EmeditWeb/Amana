@@ -1,27 +1,40 @@
 ## Summary
-Resolves issues #873, #872, #870, and #871 across mobile, backend, and frontend packages.
+Resolves issues #937, #936, #935, and #934 across documentation, CI, security, and product planning.
 
 ## Changes
 
-### 1. Mobile Dependencies & Testing Framework (#873)
-- Updated `axios` to `^1.16.0` to address high-severity vulnerability CVEs.
-- Updated `react` to `^19.0.0` and `react-native` to `^0.76.6`.
-- Added `@testing-library/react-native` and `@testing-library/jest-native` to `devDependencies`.
+### 1. Product: User Research Plan for Pilot Regions (#937)
+- Created comprehensive user research plan at `docs/USER_RESEARCH_PLAN_PILOT_REGIONS.md`.
+- Defined 8-week pilot scope targeting 2 Nigerian regions with 80-120 participants.
+- Established 9 success metrics including trade completion (≥85%), dispute rate (≤10%), and NPS (≥40).
+- Outlined 5-phase research methodology: stakeholder interviews, onboarding workshops, active trading, feedback sessions, and quantitative surveys.
+- Identified primary stakeholders (cooperative leaders, buyers, sellers, drivers) and budget estimate (~₦4.8M/$10K USD).
 
-### 2. Backend EventListener Outbox Detection (#872)
-- Added explicit warning log in `supportsOutboxPersistence()` (`EventListenerService`) when `chainEventOutbox` is unavailable on `PrismaClient` before falling back to non-outbox atomic event processing.
+### 2. CI: GitHub Actions Cache Documentation (#936)
+- Created `docs/GITHUB_ACTIONS_CACHE_STRATEGY.md` documenting cache key strategies for all stacks.
+- Explained Node.js (pnpm), Rust (Cargo), and binary caching mechanisms.
+- Documented cache key patterns: `setup-node-<OS>-pnpm-<hash(lockfile)>` for Node, `rust-cache-<OS>-<hash(Cargo.lock)>` for Rust.
+- Added troubleshooting guide for cache misses and stale dependencies.
+- Covered cache invalidation triggers and reproducibility guarantees.
 
-### 3. Frontend Trade Detail Page Rendering & Error Handling (#870)
-- Implemented `formatDetails` helper in trade details page to safely render object details without `[object Object]`.
-- Created `frontend/src/app/trades/[id]/loading.tsx` skeleton UI component.
-- Updated `useTradeDetail` hook to explicitly handle HTTP 404 responses with `"Trade not found"`.
+### 3. Docs: README Quickstart Accuracy (#935)
+- Updated `README.md` to use `pnpm` consistently across all setup commands (previously mixed npm/pnpm).
+- Added Prerequisites section with `npm install -g pnpm` installation instructions.
+- Converted numbered steps to copy-paste bash code blocks for frontend, backend, and mobile setup.
+- Updated CI gates section to reflect `pnpm install --frozen-lockfile` commands.
+- Fixed duplicate CI section causing confusion.
 
-### 4. Frontend Wallet & Auth Hook Refactoring (#871)
-- Extracted wallet detection and connection state logic into dedicated `useWalletConnection` hook.
-- Composed `useWalletConnection` within `useAuth` while exporting both for modular testing against wallet APIs.
+### 4. Security: Rate-Limit Breach Auditing and Alerting (#934)
+- Enhanced `backend/src/lib/rateLimit.ts` with breach tracking and suspicious pattern detection.
+- Implemented in-memory breach counter tracking per key with 15-minute sliding window.
+- Added automatic security alerts after 5+ breaches within window (logged as `RATE_LIMIT_ABUSE`).
+- Logs every breach with IP address, path, HTTP method, user agent, and wallet address for audit trails.
+- Structured logs compatible with SIEM tools and log aggregation platforms.
 
 ## Validation
-- `npm --prefix frontend run test -- --runInBand src/hooks/__tests__/useAuth.test.tsx` (Passed)
-- `npm --prefix frontend run test -- --runInBand src/hooks/__tests__/useWalletConnection.test.tsx` (Passed)
+- README quickstart commands tested locally (copy-paste accurate)
+- Rate-limit breach logging verified via unit tests
+- Documentation reviewed for completeness and accuracy
+- All acceptance criteria met for issues #937, #936, #935, #934
 
-closes #873, closes #872, closes #870, closes #871
+closes #937, closes #936, closes #935, closes #934

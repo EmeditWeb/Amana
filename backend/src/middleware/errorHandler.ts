@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import { env } from '../config/env';
 import { AppError, ErrorCode, StructuredErrorPayload, isAppError } from '../errors/errorCodes';
+import { isHttpError } from '../errors/httpError';
 import { CORRELATION_ID_HEADER, REQUEST_ID_HEADER, TracedRequest } from './correlationId.middleware';
 import { appLogger } from './logger';
 
@@ -46,7 +47,7 @@ export function errorHandler(
     return res.status(400).json(payload);
   }
 
-  const status = (err && typeof (err as any).status === 'number') ? (err as any).status : 500;
+  const status = isHttpError(err) ? err.status : 500;
   const message = env.NODE_ENV === 'production' ? 'Internal server error' : (err instanceof Error ? err.message : String(err));
 
   const errForLogging = err instanceof Error ? err : new Error(String(err));

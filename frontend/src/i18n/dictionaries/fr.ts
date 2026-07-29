@@ -172,6 +172,67 @@ const fr: Record<string, string> = {
   "common.confirm": "Confirmer",
   "common.back": "Retour",
   "common.next": "Suivant",
+
+  // Trust Score
+  "trust.title": "Score de confiance",
+  "trust.subtitle": "Votre score de confiance commercial avec calcul pond\u00e9r\u00e9 par d\u00e9croissance",
+  "trust.loading": "Chargement du score de confiance\u2026",
+  "trust.error": "\u00c9chec du chargement du score de confiance",
+  "trust.noData": "Aucune donn\u00e9e de score de confiance disponible",
+  "trust.noDataDescription": "Commencez \u00e0 \u00e9changer pour construire votre score de confiance sur la plateforme Amana.",
+  "trust.outOf": "sur 100",
+  "trust.lastUpdated": "Derni\u00e8re mise \u00e0 jour",
+  "trust.accountAge": "\u00c2ge du compte",
+  "trust.lastTrade": "Dernier \u00e9change",
+  "trust.never": "Jamais",
+
+  // Trust Tiers
+  "trust.tier.newcomer": "Nouveau venu",
+  "trust.tier.developing": "En d\u00e9veloppement",
+  "trust.tier.established": "\u00c9tabli",
+  "trust.tier.trusted": "Fiable",
+  "trust.tier.elite": "D\u00e9lit\u00e9",
+
+  // Trust Breakdown
+  "trust.breakdown.title": "D\u00e9composition du score",
+  "trust.breakdown.base": "Score de base",
+  "trust.breakdown.tradeCompletion": "Compl\u00e9tion des \u00e9changes",
+  "trust.breakdown.volumeBonus": "Bonus de volume",
+  "trust.breakdown.disputePenalty": "P\u00e9nalit\u00e9 de litige",
+  "trust.breakdown.activityDecay": "D\u00e9croissance d\u2019activit\u00e9",
+  "trust.breakdown.finalScore": "Score final",
+
+  // Trust Stats
+  "trust.stats.totalTrades": "Total des \u00e9changes",
+  "trust.stats.completedTrades": "\u00c9changes compl\u00e9t\u00e9s",
+  "trust.stats.disputedTrades": "\u00c9changes litigieux",
+  "trust.stats.totalVolume": "Volume total",
+  "trust.stats.successRate": "Taux de succ\u00e8s",
+  "trust.stats.accountAge": "\u00c2ge du compte",
+
+  // Trust History
+  "trust.history.title": "Historique de confiance",
+  "trust.history.subtitle": "\u00c9v\u00e9nements r\u00e9cents qui ont impact\u00e9 votre score de confiance",
+  "trust.history.empty": "Aucun \u00e9v\u00e9nement de confiance. Compl\u00e9tez des \u00e9changes pour construire votre historique.",
+  "trust.history.decayedImpact": "Impact d\u00e9cay\u00e9",
+
+  // Reputation (existing page, enhanced)
+  "reputation.title": "R\u00e9putation",
+  "reputation.subtitle": "Votre r\u00e9putation commerciale et m\u00e9triques de confiance sur la plateforme Amana",
+  "reputation.connectWallet": "Connecter le portefeuille",
+  "reputation.connectWalletDescription": "Veuillez connecter votre portefeuille pour voir votre score de confiance et votre r\u00e9putation commerciale sur la plateforme Amana.",
+  "reputation.failedToLoad": "\u00c9chec du chargement de la r\u00e9putation",
+  "reputation.tryAgain": "R\u00e9essayer",
+  "reputation.noData": "Aucune donn\u00e9e de r\u00e9putation",
+  "reputation.noDataDescription": "Votre r\u00e9putation sera calcul\u00e9e d\u00e8s que vous commencerez \u00e0 \u00e9changer sur la plateforme Amana.",
+  "reputation.trustScore": "Score de confiance",
+  "reputation.totalTrades": "Total des \u00e9changes",
+  "reputation.completed": "Compl\u00e9t\u00e9s",
+  "reputation.disputed": "Litigieux",
+  "reputation.successRate": "Taux de succ\u00e8s",
+  "reputation.trustHistory": "Historique de confiance",
+  "reputation.trustHistorySubtitle": "\u00c9v\u00e9nements r\u00e9cents qui ont impact\u00e9 votre score de r\u00e9putation",
+  "reputation.trustHistoryEmpty": "Aucun \u00e9v\u00e9nement de r\u00e9putation. Compl\u00e9tez des \u00e9changes pour construire votre historique.",
 } as const;
 
 export default fr;

@@ -21,6 +21,14 @@ type OutboxRecord = {
   nextAttemptAt: Date;
 };
 
+type ChainEventOutboxDelegate = PrismaClient["chainEventOutbox"];
+
+function isChainEventOutboxDelegate(
+  delegate: ChainEventOutboxDelegate | undefined,
+): delegate is ChainEventOutboxDelegate {
+  return typeof delegate?.findUnique === "function";
+}
+
 /**
  * Check whether a `ProcessedEvent` record already exists for the given composite key.
  * Returns `true` if the event has been processed before, `false` otherwise.
@@ -88,7 +96,7 @@ export async function processEventAtomically(
  *
  * Design choices:
  * - Recursive setTimeout (not setInterval) to avoid overlapping polls
- * - In-memory Set + DB table for duplicate ledger filtering
+ * - In-memory Set indexed by ledger + DB table for duplicate filtering
  * - Exponential backoff with jitter on RPC failures
  */
 export class EventListenerService {
@@ -96,6 +104,7 @@ export class EventListenerService {
   private config: EventListenerConfig;
   private server: StellarSdk.rpc.Server;
   private processedEvents: Set<string> = new Set();
+  private processedEventsByLedger: Map<number, Set<string>> = new Map();
   private lastLedger: number = 0;
   private running: boolean = false;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
@@ -124,9 +133,11 @@ export class EventListenerService {
       orderBy: { ledgerSequence: "desc" },
       take: this.config.processedLedgersCacheSize,
     });
-    for (const e of recentEvents) {
+    // The query is newest-first; hydrate oldest-first so Map insertion order
+    // remains the eviction order used by the O(1) ledger bucket cache.
+    for (const e of [...recentEvents].reverse()) {
       const cacheKey = `${e.ledgerSequence}:${e.contractId}:${e.eventId}`;
-      this.processedEvents.add(cacheKey);
+      this.cacheProcessedEvent(cacheKey, e.ledgerSequence);
     }
     if (recentEvents.length > 0) {
       this.lastLedger = recentEvents[0]!.ledgerSequence;
@@ -210,14 +221,15 @@ export class EventListenerService {
 
     // Durable path: DB check (survives restarts)
     if (await isAlreadyProcessed(this.prisma, { ledgerSequence, contractId, eventId })) {
-      this.processedEvents.add(cacheKey);
+      this.cacheProcessedEvent(cacheKey, ledgerSequence);
+      this.evictOldEvents();
       return;
     }
 
     if (!this.supportsOutboxPersistence()) {
       try {
         await processEventAtomically(this.prisma, parsed, dispatchEvent);
-        this.processedEvents.add(cacheKey);
+        this.cacheProcessedEvent(cacheKey, ledgerSequence);
         this.evictOldEvents();
         if (ledgerSequence > this.lastLedger) {
           this.lastLedger = ledgerSequence;
@@ -244,7 +256,7 @@ export class EventListenerService {
 
     try {
       await this.processOutboxEventAtomically(outbox.id, parsed);
-      this.processedEvents.add(cacheKey);
+      this.cacheProcessedEvent(cacheKey, ledgerSequence);
       this.evictOldEvents();
       if (ledgerSequence > this.lastLedger) {
         this.lastLedger = ledgerSequence;
@@ -264,10 +276,7 @@ export class EventListenerService {
   }
 
   private supportsOutboxPersistence(): boolean {
-    const outbox = (this.prisma as unknown as Record<string, unknown>)[
-      "chainEventOutbox"
-    ];
-    const isSupported = Boolean(outbox && typeof (outbox as any).findUnique === "function");
+    const isSupported = isChainEventOutboxDelegate(this.prisma.chainEventOutbox);
     if (!isSupported) {
       appLogger.warn(
         "[EventListener] chainEventOutbox Prisma model is unavailable. Falling back to non-outbox atomic event processing."
@@ -523,29 +532,44 @@ export class EventListenerService {
   }
 
 
-  /** Parse ledger sequence from a processed-event cache key (`ledger:contract:eventId`). */
-  private ledgerFromProcessedEventKey(key: string): number {
-    const segment = key.split(":")[0];
-    if (segment === undefined || segment === "") {
-      return -1;
+  /** Add an event to the membership set and its ledger eviction bucket. */
+  private cacheProcessedEvent(key: string, ledgerSequence: number): void {
+    if (this.processedEvents.has(key)) return;
+
+    this.processedEvents.add(key);
+    const bucket = this.processedEventsByLedger.get(ledgerSequence);
+    if (bucket) {
+      bucket.add(key);
+      return;
     }
-    const ledger = parseInt(segment, 10);
-    return Number.isFinite(ledger) ? ledger : -1;
+    this.processedEventsByLedger.set(ledgerSequence, new Set([key]));
   }
 
-  /** Evict oldest events from in-memory set when it exceeds the cache limit. */
+  /**
+   * Evict oldest events without materialising and sorting the full Set.
+   * Soroban events arrive in ledger order, so Map insertion order is the
+   * oldest-ledger queue. Work is proportional only to entries evicted.
+   */
   private evictOldEvents(): void {
-    if (this.processedEvents.size <= this.config.processedLedgersCacheSize) return;
+    let overflow =
+      this.processedEvents.size - this.config.processedLedgersCacheSize;
 
-    const sorted = Array.from(this.processedEvents).sort((a, b) => {
-      const ledgerA = this.ledgerFromProcessedEventKey(a);
-      const ledgerB = this.ledgerFromProcessedEventKey(b);
-      return ledgerA - ledgerB;
-    });
-    const toRemove = sorted.length - this.config.processedLedgersCacheSize;
-    for (let i = 0; i < toRemove; i++) {
-      const key = sorted[i];
-      if (key !== undefined) this.processedEvents.delete(key);
+    while (overflow > 0) {
+      const oldest = this.processedEventsByLedger.entries().next().value as
+        | [number, Set<string>]
+        | undefined;
+      if (!oldest) return;
+
+      const [ledger, keys] = oldest;
+      for (const key of keys) {
+        if (overflow === 0) break;
+        keys.delete(key);
+        this.processedEvents.delete(key);
+        overflow -= 1;
+      }
+      if (keys.size === 0) {
+        this.processedEventsByLedger.delete(ledger);
+      }
     }
   }
 }
