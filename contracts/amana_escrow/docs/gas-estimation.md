@@ -18,6 +18,20 @@ The tests use Soroban test utilities and reset the budget immediately before the
 
 Every measured path asserts both CPU instruction cost and memory byte cost against versioned baseline thresholds committed in `src/tests/gas_footprint_tests.rs`.
 
+## Baseline Thresholds
+
+These values are the committed upper bounds enforced by the regression tests. Any contract change that causes a measured value to exceed its baseline will fail CI.
+
+| Method              | Max CPU Instructions | Max Memory Bytes |
+|---------------------|---------------------:|-----------------:|
+| `create_trade`      |          3,000,000   |       2,000,000  |
+| `deposit`           |          5,000,000   |       3,000,000  |
+| `initiate_dispute`  |          3,000,000   |       2,000,000  |
+| `resolve_dispute`   |          8,000,000   |       4,000,000  |
+| combined lifecycle  |         19,000,000   |      11,000,000  |
+
+The combined lifecycle baseline is the sum of the four individual baselines above.
+
 ## Re-baselining policy
 
 Only re-baseline when a deliberate contract change increases cost for a documented reason. When re-baselining:

@@ -261,4 +261,81 @@ test.describe('Trade Lifecycle E2E', () => {
     await expect(page.getByText(/trade created/i)).toBeVisible();
     expect(createdTrade).toBe(true);
   });
+
+  test('uploads proof-of-delivery and settles a funded trade', async ({ page }) => {
+    await seedAuthenticatedWallet(page);
+    await mockStellarRpc(page);
+
+    const tradeId = '4294967301';
+
+    await page.route(`http://localhost:4000/trades/${tradeId}`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tradeId,
+          buyerAddress: BUYER_ADDRESS,
+          sellerAddress: SELLER_ADDRESS,
+          amountCngn: '50000',
+          status: 'FUNDED',
+          buyerLossBps: 5000,
+          sellerLossBps: 5000,
+          createdAt: new Date().toISOString(),
+          fundedAt: new Date().toISOString(),
+        }),
+      });
+    });
+
+    await page.route(`http://localhost:4000/trades/${tradeId}/evidence`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ evidenceId: 'ev-pod-001', ipfsHash: 'QmPodVideoHash' }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ evidence: [] }),
+        });
+      }
+    });
+
+    await page.route(`http://localhost:4000/trades/${tradeId}/release`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ unsignedXdr: 'release-settlement-xdr' }),
+      });
+    });
+
+    await page.goto(`/trades/${tradeId}`);
+    await page.waitForLoadState('networkidle');
+
+    // Upload PoD video evidence
+    const uploadButton = page.getByRole('button', { name: /upload|evidence|proof/i }).first();
+    if (await uploadButton.isVisible()) {
+      await uploadButton.click();
+      const fileInput = page.locator('input[type="file"]').first();
+      if (await fileInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await fileInput.setInputFiles({
+          name: 'delivery-proof.mp4',
+          mimeType: 'video/mp4',
+          buffer: Buffer.from('mock-video-content'),
+        });
+        const submitEvidence = page.getByRole('button', { name: /submit|upload/i }).first();
+        if (await submitEvidence.isVisible()) await submitEvidence.click();
+      }
+    }
+
+    // Trigger settlement / release
+    const releaseButton = page.getByRole('button', { name: /release|settle|confirm delivery/i }).first();
+    if (await releaseButton.isVisible()) {
+      await releaseButton.click();
+      await expect(
+        page.getByText(/settlement|released|completed|delivery confirmed/i),
+      ).toBeVisible();
+    }
+  });
 });

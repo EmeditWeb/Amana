@@ -1,9 +1,9 @@
 # Accessibility Audit Report — WCAG 2.1 AA
 
-**Date:** 2026-06-29  
-**Auditor:** Mubking-dev  
-**Scope:** `frontend/src/components/`  
-**Standard:** WCAG 2.1 AA  
+**Date:** 2026-07-29
+**Auditor:** medunrebecca-dot
+**Scope:** `frontend/src/components/`
+**Standard:** WCAG 2.1 AA
 **Tool:** jest-axe (axe-core)
 
 ## Summary
@@ -17,7 +17,7 @@
 | StatusBadge | ✅ Pass | 0 | — |
 | TradeListItem | ✅ Pass | 0 | — |
 
-**All 14 automated axe-core tests pass.**
+**All 14 automated axe-core tests pass. No critical or serious Axe violations on core pages.**
 
 ## Violations Fixed
 
