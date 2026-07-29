@@ -6,7 +6,7 @@ const IV_LENGTH = 12;
 const DEFAULT_KEY_VERSION = "v1";
 
 export class EncryptionService {
-  constructor(private readonly masterSecret: string = env.JWT_SECRET) {}
+  constructor(private readonly masterSecret: string = env.TRADE_NOTES_ENCRYPTION_KEY) {}
 
   encrypt(plaintext: string, tradeId: string, keyVersion: string = DEFAULT_KEY_VERSION): string {
     const key = this.deriveKey(tradeId, keyVersion);

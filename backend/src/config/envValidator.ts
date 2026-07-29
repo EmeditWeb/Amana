@@ -75,6 +75,14 @@ export class EnvValidator {
       description: 'Redis connection URL',
     },
 
+    // Trade notes encryption (required for AES-256-GCM)
+    {
+      name: 'TRADE_NOTES_ENCRYPTION_KEY',
+      category: EnvVarCategory.CRITICAL,
+      description: 'Base64-encoded 32-byte key for AES-256-GCM trade note encryption',
+      validator: (value) => value.length >= 32,
+    },
+
     // Optional - nice to have
     {
       name: 'PINATA_API_KEY',
