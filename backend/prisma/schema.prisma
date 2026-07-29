@@ -468,6 +468,21 @@ model TradeNote {
   @@index([authorAddress])
 }
 
+/// PlatformFeeEvent records the 1% platform fee deducted on each completed trade.
+/// feeUsdc is stored as a string (e.g. "1.00") to preserve decimal precision.
+/// tradeAmountUsdc is a snapshot of the trade amount at the time the fee was collected.
+model PlatformFeeEvent {
+  id                Int      @id @default(autoincrement())
+  tradeId           String   @unique @db.VarChar(255)
+  tradeAmountUsdc   String   @db.VarChar(100)
+  feeUsdc           String   @db.VarChar(100)
+  collectedAt       DateTime @default(now())
+  ledgerSequence    Int?
+
+  @@index([collectedAt])
+  @@index([tradeId])
+}
+
 /// EscrowReleaseMilestone represents one pre-defined partial release point.
 /// releasedAt is set after the matching on-chain release event is confirmed.
 model EscrowReleaseMilestone {
