@@ -84,6 +84,31 @@ npm test
 - `src/` contains the Express server, routes, middleware, services, and docs.
 - `dist/` is the compiled output directory created by `npm run build`.
 
+## Health & Readiness Checks
+
+The backend exposes several health endpoints for monitoring and orchestration:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Aggregate health — returns `healthy`, `degraded`, or `unhealthy` based on all dependency checks |
+| `GET /health/live` | Liveness probe — always returns `200` if the process is running |
+| `GET /health/ready` | Readiness probe — returns `200` only when critical dependencies (database, Redis, config) are up |
+| `GET /health/startup` | Startup check — fails with `503` if critical dependencies are down at boot |
+| `GET /health/detail` | Per-dependency latency & status for every external service |
+
+### Dependency checks performed
+
+| Dependency | Type | Critical for startup |
+|---|---|---|
+| **Database (Supabase/Prisma)** | SQL query `SELECT 1` with 200ms timeout | Yes |
+| **Redis** | `PING` with 3s timeout | Yes |
+| **Stellar node** | `loadAccount` call with 5s timeout | No (degraded if down) |
+| **IPFS/Pinata** | `testAuthentication` with 5s timeout | No (degraded if down) |
+| **Indexer** | Latest processed ledger age (<15s threshold) | No (unhealthy if lagging) |
+| **Configuration** | Validates critical env vars are present | Yes |
+
+Startup readiness (`GET /health/startup`) fails with `503` if **database**, **Redis**, or **config** checks fail. All other dependencies report as degraded without blocking startup.
+
 ## Repository Scope
 
 This backend service lives inside the `backend/` folder of the Amana monorepo and provides the API, database, and infrastructure integration for the project.
