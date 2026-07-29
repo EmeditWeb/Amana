@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import { RateLimitPreset } from '../config/rateLimit';
 import { ErrorCode } from '../errors/errorCodes';
 import { AuthRequest } from '../services/auth.service';
-import logger from '../middleware/logger';
+import { appLogger } from '../middleware/logger';
 
 type KeyGenerator = (req: Request) => string;
 
@@ -24,7 +24,7 @@ function trackRateLimitBreach(key: string, req: Request): void {
 
       // Alert on suspicious patterns
       if (existing.count >= BREACH_ALERT_THRESHOLD) {
-        logger.warn('Suspicious rate-limit breach pattern detected', {
+        appLogger.warn({
           key,
           breachCount: existing.count,
           firstBreach: existing.firstBreach.toISOString(),
@@ -34,7 +34,7 @@ function trackRateLimitBreach(key: string, req: Request): void {
           userAgent: req.headers['user-agent'],
           walletAddress: resolveWalletAddress(req),
           alert: 'RATE_LIMIT_ABUSE',
-        });
+        }, 'Suspicious rate-limit breach pattern detected');
       }
     } else {
       // Reset if outside window
@@ -45,14 +45,14 @@ function trackRateLimitBreach(key: string, req: Request): void {
   }
 
   // Log every breach for audit trail
-  logger.info('Rate limit breach', {
+  appLogger.info({
     key,
     ip: resolveClientIp(req),
     path: req.path,
     method: req.method,
     userAgent: req.headers['user-agent'],
     walletAddress: resolveWalletAddress(req),
-  });
+  }, 'Rate limit breach');
 }
 
 function resolveClientIp(req: Request): string {

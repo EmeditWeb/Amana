@@ -27,9 +27,9 @@ describe("useWalletConnection hook", () => {
   });
 
   it("checks wallet state successfully when connected and allowed", async () => {
-    mockedIsConnected.mockResolvedValue({ isConnected: true } as any);
-    mockedIsAllowed.mockResolvedValue({ isAllowed: true } as any);
-    mockedGetAddress.mockResolvedValue({ address: WALLET_ADDRESS } as any);
+    mockedIsConnected.mockResolvedValue({ isConnected: true } as Awaited<ReturnType<typeof isConnected>>);
+    mockedIsAllowed.mockResolvedValue({ isAllowed: true } as Awaited<ReturnType<typeof isAllowed>>);
+    mockedGetAddress.mockResolvedValue({ address: WALLET_ADDRESS } as Awaited<ReturnType<typeof getAddress>>);
 
     const { result } = renderHook(() => useWalletConnection());
 
@@ -46,7 +46,7 @@ describe("useWalletConnection hook", () => {
   });
 
   it("handles connectWallet action and updates address", async () => {
-    mockedRequestAccess.mockResolvedValue({ address: WALLET_ADDRESS } as any);
+    mockedRequestAccess.mockResolvedValue({ address: WALLET_ADDRESS } as Awaited<ReturnType<typeof requestAccess>>);
 
     const { result } = renderHook(() => useWalletConnection());
 

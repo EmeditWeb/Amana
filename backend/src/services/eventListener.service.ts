@@ -21,6 +21,14 @@ type OutboxRecord = {
   nextAttemptAt: Date;
 };
 
+type ChainEventOutboxDelegate = PrismaClient["chainEventOutbox"];
+
+function isChainEventOutboxDelegate(
+  delegate: ChainEventOutboxDelegate | undefined,
+): delegate is ChainEventOutboxDelegate {
+  return typeof delegate?.findUnique === "function";
+}
+
 /**
  * Check whether a `ProcessedEvent` record already exists for the given composite key.
  * Returns `true` if the event has been processed before, `false` otherwise.
@@ -268,10 +276,7 @@ export class EventListenerService {
   }
 
   private supportsOutboxPersistence(): boolean {
-    const outbox = (this.prisma as unknown as Record<string, unknown>)[
-      "chainEventOutbox"
-    ];
-    const isSupported = Boolean(outbox && typeof (outbox as any).findUnique === "function");
+    const isSupported = isChainEventOutboxDelegate(this.prisma.chainEventOutbox);
     if (!isSupported) {
       appLogger.warn(
         "[EventListener] chainEventOutbox Prisma model is unavailable. Falling back to non-outbox atomic event processing."

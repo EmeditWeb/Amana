@@ -1,9 +1,5 @@
-import {
-  Counter,
-  Gauge,
-  Histogram,
-  MeterProvider,
-} from "@opentelemetry/sdk-metrics";
+import type { Counter, Histogram } from "@opentelemetry/api";
+import { MeterProvider } from "@opentelemetry/sdk-metrics";
 
 class MetricsService {
   private static instance: MetricsService;
@@ -12,13 +8,11 @@ class MetricsService {
   // Trade metrics
   private tradeCounter: Counter;
   private tradeCompletedCounter: Counter;
-  private tradeActiveGauge: Gauge;
   private tradeLatencyHistogram: Histogram;
 
   // Dispute metrics
   private disputeCreatedCounter: Counter;
   private disputeResolvedCounter: Counter;
-  private disputeOpenGauge: Gauge;
   private disputeResolutionTimeHistogram: Histogram;
 
   // General processing metrics
@@ -40,7 +34,7 @@ class MetricsService {
       unit: "1",
     });
 
-    this.tradeActiveGauge = meter.createObservableGauge(
+    meter.createObservableGauge(
       "trades_active_count",
       {
         description: "Current number of active trades",
@@ -70,7 +64,7 @@ class MetricsService {
       }
     );
 
-    this.disputeOpenGauge = meter.createObservableGauge("disputes_open_count", {
+    meter.createObservableGauge("disputes_open_count", {
       description: "Current number of open disputes",
       unit: "1",
     });

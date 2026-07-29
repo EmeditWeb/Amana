@@ -1,4 +1,4 @@
-import { Icon } from "@/components/ui/Icon";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Spinner } from "@/components/ui/Spinner";
 
@@ -13,18 +13,18 @@ const STEPS = [
 
 const SAMPLE_ICONS = [
   "shield",
-  "check-circle",
-  "alert-triangle",
+  "circle-check",
+  "triangle-alert",
   "truck",
   "file-text",
   "lock",
-  "unlock",
+  "lock-open",
   "user",
   "star",
   "arrow-right",
   "clock",
-  "x-circle",
-];
+  "circle-x",
+] satisfies IconName[];
 
 export default function IconDevPage() {
   return (
@@ -99,13 +99,13 @@ export default function IconDevPage() {
           Color via className
         </h2>
         <div className="flex items-center gap-5">
-          <Icon name="check-circle" size="md" className="text-emerald" />
+          <Icon name="circle-check" size="md" className="text-emerald" />
           <Icon
-            name="alert-triangle"
+            name="triangle-alert"
             size="md"
             className="text-status-warning"
           />
-          <Icon name="x-circle" size="md" className="text-status-danger" />
+          <Icon name="circle-x" size="md" className="text-status-danger" />
           <Icon name="lock" size="md" className="text-gold" />
           <Icon name="user" size="md" />
           {/* ↑ no className → falls back to text-text-secondary */}

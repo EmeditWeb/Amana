@@ -13,11 +13,9 @@ const SIZE_MAP = {
 
 // Utility type: converts PascalCase Lucide icon keys to kebab-case
 type PascalToKebab<S extends string> = S extends `${infer First extends string}${infer Rest}`
-  ? First extends Uppercase<First>
-    ? First extends Lowercase<First>
-      ? `${First}${PascalToKebab<Rest>}`
-      : `${Lowercase<First>}${PascalToKebab<Rest>}`
-    : `${First}${PascalToKebab<Rest>}`
+  ? Rest extends Uncapitalize<Rest>
+    ? `${Lowercase<First>}${PascalToKebab<Rest>}`
+    : `${Lowercase<First>}-${PascalToKebab<Rest>}`
   : "";
 
 // All valid kebab-case Lucide icon names derived from the icons registry

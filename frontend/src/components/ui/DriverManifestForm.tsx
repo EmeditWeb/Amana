@@ -150,3 +150,5 @@ export function DriverManifestForm({ isOpen, onComplete, onDismiss }: DriverMani
     </Dialog.Root>
   );
 }
+
+export default DriverManifestForm;
