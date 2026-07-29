@@ -7,6 +7,26 @@ const mockRateLimit = jest.fn((options: unknown) => {
   return (_req: Request, _res: Response, next: () => void) => next();
 });
 
+type RateLimiterOptions = {
+  windowMs: number;
+  max: number;
+  standardHeaders: boolean;
+  legacyHeaders: boolean;
+  handler: (
+    req: Request,
+    res: Response,
+    next: () => void,
+    options: { message?: string; windowMs?: number; max?: number },
+  ) => void;
+  keyGenerator: (req: Request) => string;
+};
+
+function firstRateLimitOptions(): RateLimiterOptions {
+  const call = mockRateLimit.mock.calls[0];
+  expect(call).toBeDefined();
+  return call![0] as RateLimiterOptions;
+}
+
 jest.mock('express-rate-limit', () => ({
   __esModule: true,
   default: (options: unknown) => mockRateLimit(options),
@@ -41,6 +61,32 @@ describe('rate limit configuration', () => {
       message: 'Too many dispute initiation attempts, try again later.',
     });
   });
+
+  it('honors environment overrides when the rate limit config is loaded', () => {
+    const previousMax = process.env.RATE_LIMIT_AUTH_MAX;
+    const previousWindow = process.env.RATE_LIMIT_AUTH_WINDOW_MS;
+    process.env.RATE_LIMIT_AUTH_MAX = '3';
+    process.env.RATE_LIMIT_AUTH_WINDOW_MS = '60000';
+
+    try {
+      jest.isolateModules(() => {
+        const { RATE_LIMIT_CONFIG: reloadedConfig } = require('../config/rateLimit') as typeof import('../config/rateLimit');
+        expect(reloadedConfig.auth.max).toBe(3);
+        expect(reloadedConfig.auth.windowMs).toBe(60_000);
+      });
+    } finally {
+      if (previousMax === undefined) {
+        delete process.env.RATE_LIMIT_AUTH_MAX;
+      } else {
+        process.env.RATE_LIMIT_AUTH_MAX = previousMax;
+      }
+      if (previousWindow === undefined) {
+        delete process.env.RATE_LIMIT_AUTH_WINDOW_MS;
+      } else {
+        process.env.RATE_LIMIT_AUTH_WINDOW_MS = previousWindow;
+      }
+    }
+  });
 });
 
 describe('rate limit factory', () => {
@@ -56,7 +102,7 @@ describe('rate limit factory', () => {
     });
 
     expect(mockRateLimit).toHaveBeenCalledTimes(1);
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = firstRateLimitOptions();
 
     expect(options.windowMs).toBe(RATE_LIMIT_CONFIG.auth.windowMs);
     expect(options.max).toBe(RATE_LIMIT_CONFIG.auth.max);
@@ -100,7 +146,7 @@ describe('rate limit factory', () => {
       createIpRateLimiter(RATE_LIMIT_CONFIG.user);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = firstRateLimitOptions();
     const req = {
       headers: { 'x-forwarded-for': '203.0.113.10, 10.0.0.1' },
       ip: '127.0.0.1',
@@ -116,7 +162,7 @@ describe('rate limit factory', () => {
       createWalletRateLimiter(RATE_LIMIT_CONFIG.dispute);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = firstRateLimitOptions();
     const req = {
       user: { walletAddress: 'GABC123EXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXAMPLE12' },
       headers: {},
@@ -135,7 +181,7 @@ describe('rate limit factory', () => {
       createWalletRateLimiter(RATE_LIMIT_CONFIG.dispute);
     });
 
-    const options = mockRateLimit.mock.calls[0][0] as any;
+    const options = firstRateLimitOptions();
     const req = {
       headers: {},
       ip: '198.51.100.4',
@@ -170,7 +216,10 @@ describe('auth route wiring', () => {
     });
 
     expect(mockRateLimit).toHaveBeenCalledTimes(2);
-    expect((mockRateLimit.mock.calls[0][0] as any).max).toBe(RATE_LIMIT_CONFIG.auth.max);
-    expect((mockRateLimit.mock.calls[1][0] as any).max).toBe(RATE_LIMIT_CONFIG.authRefresh.max);
+    const [authCall, refreshCall] = mockRateLimit.mock.calls;
+    expect(authCall).toBeDefined();
+    expect(refreshCall).toBeDefined();
+    expect((authCall![0] as RateLimiterOptions).max).toBe(RATE_LIMIT_CONFIG.auth.max);
+    expect((refreshCall![0] as RateLimiterOptions).max).toBe(RATE_LIMIT_CONFIG.authRefresh.max);
   });
 });

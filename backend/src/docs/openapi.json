@@ -27,6 +27,9 @@
       "name": "Trades"
     },
     {
+      "name": "Disputes"
+    },
+    {
       "name": "Dispute Categories"
     },
     {
@@ -40,6 +43,24 @@
     },
     {
       "name": "Treasury"
+    },
+    {
+      "name": "Notifications"
+    },
+    {
+      "name": "Stellar"
+    },
+    {
+      "name": "Contract"
+    },
+    {
+      "name": "Admin"
+    },
+    {
+      "name": "Webhooks"
+    },
+    {
+      "name": "Metrics"
     },
     {
       "name": "Goals"
@@ -59,6 +80,16 @@
         "name": "id",
         "required": true,
         "description": "Trade identifier used by the backend route layer.",
+        "schema": {
+          "type": "string"
+        },
+        "example": 4294967297
+      },
+      "DisputeIdPath": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "description": "Trade identifier for the dispute.",
         "schema": {
           "type": "string"
         },
@@ -413,12 +444,24 @@
               },
               "indexer": {
                 "$ref": "#/components/schemas/HealthIndicator"
+              },
+              "stellar": {
+                "$ref": "#/components/schemas/HealthIndicator"
+              },
+              "ipfs": {
+                "$ref": "#/components/schemas/HealthIndicator"
+              },
+              "config": {
+                "$ref": "#/components/schemas/HealthIndicator"
               }
             },
             "required": [
               "database",
+              "indexer",
+              "stellar",
+              "ipfs",
               "redis",
-              "indexer"
+              "config"
             ]
           },
           "details": {
@@ -436,13 +479,28 @@
               "lastProcessedLedger": {
                 "type": "integer",
                 "nullable": true
+              },
+              "stellarNetwork": {
+                "type": "string"
+              },
+              "ipfsGateway": {
+                "type": "string"
+              },
+              "missingEnvVars": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
               "databaseLatency",
               "redisLatency",
               "indexerLagSeconds",
-              "lastProcessedLedger"
+              "lastProcessedLedger",
+              "stellarNetwork",
+              "ipfsGateway",
+              "missingEnvVars"
             ]
           }
         },
@@ -763,6 +821,126 @@
         "required": [
           "items"
         ]
+      },
+      "DisputeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tradeId": {
+            "type": "string"
+          },
+          "initiator": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "UNDER_REVIEW",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "trade": {
+            "type": "object",
+            "properties": {
+              "buyerAddress": {
+                "type": "string"
+              },
+              "sellerAddress": {
+                "type": "string"
+              },
+              "amountUsdc": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "tradeId",
+          "initiator",
+          "reason",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "trade"
+        ]
+      },
+      "DisputeListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DisputeResponse"
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "totalPages": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "page",
+              "limit",
+              "total",
+              "totalPages"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
+        ]
+      },
+      "DisputeTransitionRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "UNDER_REVIEW",
+              "RESOLVED",
+              "CLOSED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "example": {
+          "status": "UNDER_REVIEW"
+        }
       },
       "DisputeCategoryMutationRequest": {
         "type": "object",
@@ -1175,7 +1353,7 @@
           "Health"
         ],
         "summary": "Run a comprehensive health check",
-        "description": "Returns composite health state for database and indexer dependencies.\nError code references: `INFRA_ERROR`, `INTERNAL_ERROR`.",
+        "description": "Returns composite health state for database, Redis cache, and indexer dependencies.\nError code references: `INFRA_ERROR`, `INTERNAL_ERROR`.",
         "responses": {
           "200": {
             "description": "Service is healthy or degraded but still responding.",
@@ -1616,6 +1794,66 @@
         }
       }
     },
+    "/users/me/reputation": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch the authenticated user's reputation",
+        "description": "Returns reputation metrics for the wallet in the bearer token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reputation metrics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/users/me/trust-score": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch the authenticated user's trust score",
+        "description": "Returns trust score details for the wallet in the bearer token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trust score details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
     "/users/{address}": {
       "get": {
         "tags": [
@@ -1654,6 +1892,66 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/users/{address}/reputation": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch public reputation by Stellar address",
+        "description": "Returns reputation metrics for the supplied wallet address.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserAddressPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reputation metrics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          }
+        }
+      }
+    },
+    "/users/{address}/trust-score": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Fetch public trust score by Stellar address",
+        "description": "Returns trust score details for the supplied wallet address.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserAddressPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trust score details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
           }
         }
       }
@@ -1890,6 +2188,168 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFoundError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/disputes": {
+      "get": {
+        "tags": [
+          "Disputes"
+        ],
+        "summary": "List disputes for mediators",
+        "description": "Returns paginated list of disputes accessible to the authenticated mediator.\nError code references: `AUTH_ERROR`, `INTERNAL_ERROR`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "UNDER_REVIEW",
+                "RESOLVED",
+                "CLOSED"
+              ]
+            },
+            "description": "Filter by dispute status"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": "Page number for pagination"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dispute list returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Caller is not a mediator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/disputes/{id}/transition": {
+      "post": {
+        "tags": [
+          "Disputes"
+        ],
+        "summary": "Transition dispute status",
+        "description": "Mediator-only endpoint to transition a dispute to a new status.\nValid transitions: OPEN → UNDER_REVIEW → RESOLVED/CLOSED\nError code references: `AUTH_ERROR`, `DISPUTE_NOT_FOUND`, `DISPUTE_STATUS_TRANSITION_INVALID`, `DISPUTE_STATUS_CONFLICT`, `INTERNAL_ERROR`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DisputeIdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeTransitionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dispute status transitioned successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "description": "Caller is not a mediator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Dispute not found for the trade.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Dispute was modified by another user (optimistic concurrency conflict).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -2977,6 +3437,1634 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/health/detail": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Return detailed dependency health information",
+        "description": "Public diagnostic endpoint with expanded backend dependency status.",
+        "responses": {
+          "200": {
+            "description": "Detailed health payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One or more dependencies are degraded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics-info": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Describe metrics collection status",
+        "description": "Public endpoint exposing Prometheus/metrics integration metadata.",
+        "responses": {
+          "200": {
+            "description": "Metrics metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh an existing JWT",
+        "description": "Exchanges a recently issued bearer token for a fresh token. This endpoint has its own stricter configurable rate limit.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "New bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthVerifyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "429": {
+            "description": "Refresh rate limit exceeded."
+          }
+        }
+      }
+    },
+    "/auth/validate": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Validate the current JWT",
+        "description": "Returns the decoded authenticated user payload when the bearer token is valid.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token is valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    },
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [
+                    "valid",
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/notifications/preferences": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get notification preferences",
+        "description": "Returns the authenticated user's saved notification channel preferences.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preference map by event type.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "push",
+                            "in-app"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Update notification preferences",
+        "description": "Merges notification channel preferences for the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "push",
+                      "in-app"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved preference map.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List in-app notifications",
+        "description": "Lists the authenticated user's in-app notifications with pagination and unread counts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "unreadOnly",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark one notification as read",
+        "description": "Marks a notification owned by the authenticated user as read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification read status was updated or already read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all notifications as read",
+        "description": "Marks every unread in-app notification for the authenticated user as read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Count of notifications updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/trades/export": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Export authenticated user's trades",
+        "description": "Returns a filtered trade export as JSON or CSV.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ListTradesStatusQuery"
+          },
+          {
+            "in": "query",
+            "name": "dateFrom",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dateTo",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ListTradesPageQuery"
+          },
+          {
+            "$ref": "#/components/parameters/ListTradesLimitQuery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON export page or CSV file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/trades/templates": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "List saved trade templates",
+        "description": "Lists templates owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade template list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Save a trade template",
+        "description": "Saves a reusable trade template for the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created template.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/trades/from-template/{templateId}": {
+      "post": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Create a trade from a template",
+        "description": "Creates an unsigned trade from a saved template owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "templateId",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Unsigned trade creation response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradeMutationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/trades/watched": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "List watched trades",
+        "description": "Lists trades the authenticated user has added to their watchlist.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Watched trade list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/trades/{id}/watch": {
+      "post": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Watch a trade",
+        "description": "Adds a trade visible to the authenticated user to their watchlist.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Watch record.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Stop watching a trade",
+        "description": "Removes a watched trade for the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Watch removal result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/trades/{id}/notes": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "List trade notes",
+        "description": "Lists notes for a trade visible to the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "notes"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Add a trade note",
+        "description": "Adds a private note to a trade visible to the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "content"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created note metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/trades/{id}/schedule": {
+      "get": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Get escrow release schedule",
+        "description": "Returns release milestones configured for a trade.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release schedule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trades"
+        ],
+        "summary": "Replace escrow release schedule",
+        "description": "Replaces the trade's milestone-based release schedule.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TradeIdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "milestones": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "milestoneIndex": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "amountUsdc": {
+                          "type": "string"
+                        },
+                        "dueAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "conditionHash": {
+                          "type": "string",
+                          "maxLength": 64
+                        }
+                      },
+                      "required": [
+                        "milestoneIndex",
+                        "amountUsdc",
+                        "dueAt"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "milestones"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Saved release schedule.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          }
+        }
+      }
+    },
+    "/stellar/fees": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get Stellar fee statistics",
+        "description": "Public endpoint that proxies Horizon fee statistics.",
+        "responses": {
+          "200": {
+            "description": "Stellar fee information.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/tx/{hash}/status": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get Stellar transaction status",
+        "description": "Looks up a transaction hash on Horizon and returns success, failure, or pending status.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hash",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "404": {
+            "description": "Transaction pending or not found."
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/assets": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "List Stellar assets",
+        "description": "Lists assets from Horizon, optionally scoped by issuer.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "issuer",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/assets/{code}": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get Stellar assets by code",
+        "description": "Lists Horizon assets with the supplied asset code and optional issuer.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "issuer",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching assets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/stellar/account": {
+      "post": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Create a Stellar keypair",
+        "description": "Creates an encrypted Stellar account secret; testnet requests may be funded through friendbot.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fund": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created account keys.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "publicKey": {
+                      "type": "string"
+                    },
+                    "encryptedSecretKey": {
+                      "type": "string"
+                    },
+                    "funded": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "publicKey",
+                    "encryptedSecretKey",
+                    "funded"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stellar/account/{address}/balance": {
+      "get": {
+        "tags": [
+          "Stellar"
+        ],
+        "summary": "Get Stellar account balances",
+        "description": "Returns balances for a Stellar account address.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 56,
+              "maxLength": 56
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account balances.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "502": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/contract/{contractId}/state": {
+      "get": {
+        "tags": [
+          "Contract"
+        ],
+        "summary": "Get Soroban contract trade state",
+        "description": "Reads on-chain trade state for a contract and trade id.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contractId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tradeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contract state payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          }
+        }
+      }
+    },
+    "/admin/features": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List feature flags",
+        "description": "Admin-only endpoint that lists feature flag state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/admin/features/{name}": {
+      "patch": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Update a feature flag",
+        "description": "Admin-only endpoint that updates feature flag state and optional rollout percentage.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "rolloutPercentage": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated feature flag.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/admin/evidence/verify": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Verify all evidence pins",
+        "description": "Admin-only synchronous evidence pin verification pass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/admin/evidence/verify/repair": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Verify and repair missing evidence pins",
+        "description": "Admin-only verification pass that can attempt repair for missing pins.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repairMissing": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification and repair report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/admin/evidence/verify/single": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Verify one evidence CID",
+        "description": "Admin-only endpoint that checks a single IPFS CID pin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cid": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cid"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Single CID verification result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/admin/evidence/verify/queue": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Queue evidence verification",
+        "description": "Admin-only endpoint that queues an asynchronous evidence verification job.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repairMissing": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Verification job queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhook subscriptions",
+        "description": "Lists webhook subscriptions owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook subscriptions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Register a webhook subscription",
+        "description": "Registers a webhook URL and event list for the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "secret": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "events"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created webhook subscription and plaintext secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/LegacyValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Delete a webhook subscription",
+        "description": "Deletes a webhook subscription owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundError"
           }
         }
       }

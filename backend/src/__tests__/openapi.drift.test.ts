@@ -31,14 +31,15 @@ function loadSpec(): OpenApiSpec {
   return YAML.parse(raw) as OpenApiSpec;
 }
 
-// Convert OpenAPI path template (/trades/{id}/history) to a concrete test URL.
-function templateToUrl(template: string): string {
-  return template.replace(/\{[^}]+\}/g, "test-id");
-}
-
 // The set of routes the spec documents.
 function specPaths(spec: OpenApiSpec): string[] {
   return Object.keys(spec.paths);
+}
+
+function requiredSchema(spec: OpenApiSpec, name: string): SchemaObject {
+  const schema = spec.components.schemas[name];
+  expect(schema).toBeDefined();
+  return schema!;
 }
 
 // Routes we know are implemented in app.ts (kept in sync manually; test fails if this list
@@ -48,32 +49,68 @@ const IMPLEMENTED_ROUTES = [
   "/health/live",
   "/health/ready",
   "/health/startup",
+  "/health/detail",
+  "/metrics-info",
   "/auth/challenge",
   "/auth/verify",
   "/auth/logout",
+  "/auth/refresh",
+  "/auth/validate",
   "/wallet/balance",
   "/wallet/path-payment-quote",
   "/users/me",
+  "/users/me/reputation",
+  "/users/me/trust-score",
   "/users/{address}",
+  "/users/{address}/reputation",
+  "/users/{address}/trust-score",
+  "/notifications/preferences",
+  "/notifications",
+  "/notifications/{id}/read",
+  "/notifications/read-all",
   "/dispute-categories",
   "/dispute-categories/{id}",
+  "/disputes",
+  "/disputes/{id}/transition",
   "/trades",
+  "/trades/export",
+  "/trades/templates",
+  "/trades/from-template/{templateId}",
+  "/trades/watched",
   "/trades/stats",
   "/trades/{id}",
+  "/trades/{id}/watch",
   "/trades/{id}/deposit",
   "/trades/{id}/confirm",
   "/trades/{id}/release",
   "/trades/{id}/dispute",
+  "/trades/{id}/notes",
+  "/trades/{id}/schedule",
   "/trades/{id}/manifest",
   "/trades/{id}/evidence",
   "/evidence/{cid}/stream",
   "/evidence/video",
   "/trades/{id}/history",
   "/trades/{id}/history/verify",
+  "/stellar/fees",
+  "/stellar/tx/{hash}/status",
+  "/stellar/assets",
+  "/stellar/assets/{code}",
+  "/stellar/account",
+  "/stellar/account/{address}/balance",
+  "/contract/{contractId}/state",
   "/goals",
   "/treasury/balance",
   "/treasury/withdraw",
   "/treasury/config",
+  "/admin/features",
+  "/admin/features/{name}",
+  "/admin/evidence/verify",
+  "/admin/evidence/verify/repair",
+  "/admin/evidence/verify/single",
+  "/admin/evidence/verify/queue",
+  "/webhooks",
+  "/webhooks/{id}",
 ];
 
 describe("OpenAPI drift detection", () => {
@@ -143,8 +180,7 @@ describe("OpenAPI drift detection", () => {
 
   describe("/trades response schema contracts", () => {
     it("TradeMutationResponse requires tradeId and unsignedXdr as strings", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeMutationResponse"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeMutationResponse");
       expect(schema.required).toContain("tradeId");
       expect(schema.required).toContain("unsignedXdr");
       expect(schema.properties?.tradeId?.type).toBe("string");
@@ -152,16 +188,14 @@ describe("OpenAPI drift detection", () => {
     });
 
     it("TradeListResponse requires items as an array of TradeSummary", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeListResponse"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeListResponse");
       expect(schema.required).toContain("items");
       expect(schema.properties?.items?.type).toBe("array");
       expect(schema.properties?.items?.items).toHaveProperty("$ref");
     });
 
     it("TradeSummary requires tradeId and documents buyer/seller/amount/status fields", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeSummary"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeSummary");
       expect(schema.required).toContain("tradeId");
       expect(schema.properties).toHaveProperty("buyerAddress");
       expect(schema.properties).toHaveProperty("sellerAddress");
@@ -170,8 +204,7 @@ describe("OpenAPI drift detection", () => {
     });
 
     it("TradeMutationRequest requires sellerAddress and amountUsdc", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeMutationRequest"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeMutationRequest");
       expect(schema.required).toContain("sellerAddress");
       expect(schema.required).toContain("amountUsdc");
       expect(schema.required).toContain("buyerLossBps");
@@ -182,8 +215,7 @@ describe("OpenAPI drift detection", () => {
     });
 
     it("UnsignedXdrResponse requires unsignedXdr (used by deposit/confirm/release)", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["UnsignedXdrResponse"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "UnsignedXdrResponse");
       expect(schema.required).toContain("unsignedXdr");
       expect(schema.properties?.unsignedXdr?.type).toBe("string");
     });
@@ -192,7 +224,7 @@ describe("OpenAPI drift detection", () => {
       const tradePaths = specPaths(spec).filter((p) => p.startsWith("/trades"));
       expect(tradePaths.length).toBeGreaterThan(0);
       for (const p of tradePaths) {
-        const methods = Object.keys(spec.paths[p]);
+        const methods = Object.keys(spec.paths[p]!);
         expect(methods.length).toBeGreaterThan(0);
       }
     });
@@ -211,21 +243,18 @@ describe("OpenAPI drift detection", () => {
     });
 
     it("TradeListResponse includes pagination metadata", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeListResponse"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeListResponse");
       expect(schema.properties).toHaveProperty("items");
       expect(schema.additionalProperties).toBe(true);
     });
 
     it("TradeStatsResponse schema is documented for /trades/stats endpoint", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeStatsResponse"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeStatsResponse");
       expect(schema.type).toBe("object");
     });
 
     it("POST /trades request schema validates buyer and seller loss basis points", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeMutationRequest"];
-      expect(schema).toBeDefined();
+      const schema = requiredSchema(spec, "TradeMutationRequest");
       
       const buyerLossBps = schema.properties?.buyerLossBps;
       const sellerLossBps = schema.properties?.sellerLossBps;
@@ -451,7 +480,7 @@ describe("OpenAPI drift detection", () => {
     });
 
     it("TradeMutationRequest amountUsdc field accepts both string and number", () => {
-      const schema = (spec as OpenApiSpec).components.schemas["TradeMutationRequest"];
+      const schema = requiredSchema(spec, "TradeMutationRequest");
       const amountUsdcSchema = schema.properties?.amountUsdc;
       
       expect(amountUsdcSchema).toBeDefined();

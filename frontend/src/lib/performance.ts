@@ -3,12 +3,17 @@ import type { NextWebVitalsMetric } from "next/app";
 export function reportWebVitals(metric: NextWebVitalsMetric) {
   if (process.env.NODE_ENV === "production") {
     const body = JSON.stringify(metric);
-    (navigator.sendBeacon || fetch)("/api/vitals", {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon("/api/vitals", new Blob([body], { type: "application/json" }));
+      return;
+    }
+
+    void fetch("/api/vitals", {
       body,
       method: "POST",
       keepalive: true,
-      type: "application/json",
-    } as RequestInit);
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 

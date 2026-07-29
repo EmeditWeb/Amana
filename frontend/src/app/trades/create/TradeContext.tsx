@@ -5,7 +5,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -79,20 +78,11 @@ function loadDraft(): TradeData {
 
 export function TradeProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState(1);
-  const [data, setData] = useState<TradeData>(defaults);
-  const hydrated = useRef(false);
-
-  // Hydrate from localStorage on mount (client only)
-  useEffect(() => {
-    if (!hydrated.current) {
-      hydrated.current = true;
-      setData(loadDraft());
-    }
-  }, []);
+  const [data, setData] = useState<TradeData>(() => loadDraft());
 
   // Persist draft to localStorage on every change
   useEffect(() => {
-    if (hydrated.current && typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
   }, [data]);

@@ -1,9 +1,5 @@
 import type { NextConfig } from "next";
 
-const withBundleAnalyzer = process.env.ANALYZE === "true"
-  ? (await import("@next/bundle-analyzer")).default({ enabled: true })
-  : (config: NextConfig) => config;
-
 const nextConfig: NextConfig = {
   compiler: {
     removeConsole:
@@ -21,4 +17,14 @@ const nextConfig: NextConfig = {
   turbopack: {},
 };
 
-export default withBundleAnalyzer(nextConfig);
+export default async function config() {
+  if (process.env.ANALYZE !== "true") {
+    return nextConfig;
+  }
+
+  const bundleAnalyzerPackage = "@next/bundle-analyzer";
+  const withBundleAnalyzer = (await import(bundleAnalyzerPackage)).default({
+    enabled: true,
+  });
+  return withBundleAnalyzer(nextConfig);
+}
