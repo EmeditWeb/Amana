@@ -43,6 +43,10 @@ import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-v
 import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { env } from "./config/env";
+import { validateEnvironment } from "./config/envValidator";
+
+// Fail fast at boot if required environment variables are missing
+validateEnvironment();
 
 /** Parse the CORS_ORIGINS env var into a usable allowlist.
  *  Value should be a comma-separated list of allowed origins, e.g.:
