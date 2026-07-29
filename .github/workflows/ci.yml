@@ -1,5 +1,9 @@
 name: CI
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   workflow_dispatch:
   push:
@@ -142,6 +146,7 @@ jobs:
         run: |
           export NODE_ENV=test
           export JWT_SECRET=test-jwt-secret-value-with-minimum-length-32
+          export TRADE_NOTES_ENCRYPTION_KEY=test-trade-notes-encryption-key-base64-32chr
           pnpm test -- --coverage
         working-directory: backend
 
@@ -245,6 +250,7 @@ jobs:
         env:
           NODE_ENV: test
           JWT_SECRET: test-jwt-secret-value-with-minimum-length-32
+          TRADE_NOTES_ENCRYPTION_KEY: test-trade-notes-encryption-key-base64-32chr
         run: pnpm test:pact
         working-directory: backend
 
