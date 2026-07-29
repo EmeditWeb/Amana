@@ -9,10 +9,17 @@ function bodyHash(body: unknown): string {
   return createHash("sha256").update(normalized).digest("hex");
 }
 
-const IDEMPOTENCY_TTL = 60 * 60 * 24; // 24 hours
-const IDEMPOTENCY_LOCK_TTL = 30; // 30 seconds
+const IDEMPOTENCY_LOCK_TTL = 30;
 const IN_PROGRESS_POLL_MS = 25;
 const IDEMPOTENCY_IN_PROGRESS_MAX_WAIT_MS = IDEMPOTENCY_LOCK_TTL * 1000;
+
+/** Scope-aware TTLs per ADR-004 / issue #987. */
+function idempotencyTtl(path: string): number {
+  if (/\/trades/.test(path)) return 60 * 60 * 24;       // 24h
+  if (/\/disputes/.test(path)) return 60 * 60 * 48;     // 48h
+  if (/\/evidence/.test(path)) return 60 * 60 * 24 * 7; // 7d
+  return 60 * 60;                                        // 1h default
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,6 +57,7 @@ export const idempotencyMiddleware = async (
 
   const cacheKey = `idempotency:${req.method}:${req.path}:${key}`;
   const lockKey = `idempotency:lock:${req.method}:${req.path}:${key}`;
+  const ttl = idempotencyTtl(req.path);
 
   try {
     const cachedResponse = await redis.get(cacheKey);
@@ -122,7 +130,7 @@ export const idempotencyMiddleware = async (
           headers: res.getHeaders(),
           requestBodyHash: bodyHash(req.body),
         };
-        redis.set(cacheKey, JSON.stringify(responseData), "EX", IDEMPOTENCY_TTL)
+        redis.set(cacheKey, JSON.stringify(responseData), "EX", ttl)
           .catch(err => appLogger.error({ err }, "Failed to cache idempotent response"));
       }
     };

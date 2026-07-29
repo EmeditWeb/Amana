@@ -7,6 +7,7 @@ import { tracingMiddleware } from './middleware/tracing.middleware';
 import loggerMiddleware from './middleware/logger';
 import { requestLoggerMiddleware } from "./middleware/request.logger.middleware";
 import securityHeaders from "./middleware/securityHeaders";
+import { apiVersionHeader, deprecationHeaders } from "./middleware/apiVersion.middleware";
 import { authRoutes } from "./routes/auth.routes";
 import { walletRoutes } from "./routes/wallet.routes";
 import { createTradeRouter } from "./routes/trade.routes";
@@ -134,71 +135,69 @@ export function createApp(): express.Application {
   // Structured per-request logger: method, path, status, durationMs, correlationId, userId, userAgent, ip
   app.use(requestLoggerMiddleware);
 
-  // Enhanced health check with deep introspection
+  // Enhanced health check with deep introspection — not versioned (operational endpoint)
   app.use("/health", createHealthRouter());
   app.use("/health", createHealthDetailRouter());
 
-  // Prometheus metrics endpoint
+  // Prometheus metrics endpoint — not versioned (operational endpoint)
   app.use(createMetricsRouter());
 
-  app.use("/auth", authRoutes);
-  app.use("/wallet", walletRoutes);
-  app.use("/users", userRoutes);
-  app.use("/users", reputationRoutes);
-  app.use("/users", createTrustScoreRouter());
-  app.use(createNotificationPreferencesRouter());
-  app.use(createNotificationsRouter());
+  // ── Build the versioned resource router (all API routes) ──────────────────
+  // This single router instance is mounted twice:
+  //   1. /api/v1  — canonical, gets X-API-Version: 1
+  //   2. /        — legacy unprefixed paths, gets Deprecation/Sunset headers
+  // Operational endpoints (/health, /metrics-info) are intentionally excluded.
+  function buildApiRouter(): express.Router {
+    const r = express.Router();
 
-  // These literal routes must precede the generic /trades/:id handler.
-  app.use("/trades", createTradeExportRouter());
-  app.use("/trades", createTradeTemplateRouter());
-  app.use("/trades", createTradeWatchlistRouter());
-  app.use("/trades", createTradeEvidenceRouter());
-  app.use("/trades", createEscrowReleaseRouter());
-  app.use("/trades", createEscrowScheduleRouter());
-  app.use("/trades", createTradeRouter());
+    r.use("/auth", authRoutes);
+    r.use("/wallet", walletRoutes);
+    r.use("/users", userRoutes);
+    r.use("/users", reputationRoutes);
+    r.use("/users", createTrustScoreRouter());
+    r.use(createNotificationPreferencesRouter());
+    r.use(createNotificationsRouter());
 
-  // Notes: POST /trades/:id/notes and GET /trades/:id/notes
-  app.use("/trades", createTradeNotesRouter());
+    // These literal routes must precede the generic /trades/:id handler.
+    r.use("/trades", createTradeExportRouter());
+    r.use("/trades", createTradeTemplateRouter());
+    r.use("/trades", createTradeWatchlistRouter());
+    r.use("/trades", createTradeEvidenceRouter());
+    r.use("/trades", createEscrowReleaseRouter());
+    r.use("/trades", createEscrowScheduleRouter());
+    r.use("/trades", createTradeRouter());
+    r.use("/trades", createTradeNotesRouter());
+    r.use("/trades/:id/manifest", createTradeManifestRouter());
+    r.use("/trades/:id/manifest", createManifestRouter());
+    r.use(createEvidenceRouter());
+    r.use("/trades", createAuditTrailRouter());
 
-  // Manifest: POST /trades/:id/manifest
-  app.use("/trades/:id/manifest", createTradeManifestRouter());
-  app.use("/trades/:id/manifest", createManifestRouter());
+    r.use("/goals", createGoalsRouter());
+    r.use("/disputes", disputeRoutes);
+    r.use("/dispute-categories", disputeCategoryRoutes);
 
-  // Evidence: GET /trades/:id/evidence and GET /evidence/:cid/stream
-  app.use(createEvidenceRouter());
+    r.use("/stellar/fees", stellarFeesRoutes);
+    r.use("/stellar/tx", stellarTxStatusRoutes);
+    r.use("/stellar/assets", stellarAssetRoutes);
+    r.use("/stellar/account", stellarAccountCreateRoutes);
+    r.use("/stellar/account", stellarAccountBalanceRoutes);
+    r.use("/contract", createContractStateRouter());
 
-  // Audit trail: GET /trades/:id/history
-  app.use("/trades", createAuditTrailRouter());
+    r.use("/treasury", createTreasuryRouter());
+    r.use(createAdminFeaturesRouter());
+    r.use(createAdminEvidenceVerificationRouter());
+    r.use("/webhooks", webhooksRoutes);
 
-  // Goals analytics: GET /goals
-  app.use("/goals", createGoalsRouter());
+    return r;
+  }
 
-  // Disputes: GET /disputes
-  app.use("/disputes", disputeRoutes);
+  const apiRouter = buildApiRouter();
 
-  // Dispute categories: CRUD /dispute-categories
-  app.use("/dispute-categories", disputeCategoryRoutes);
+  // Versioned mount — canonical path, advertises version
+  app.use("/api/v1", apiVersionHeader(1), apiRouter);
 
-  // Stellar network endpoints
-  app.use("/stellar/fees", stellarFeesRoutes);
-  app.use("/stellar/tx", stellarTxStatusRoutes);
-  app.use("/stellar/assets", stellarAssetRoutes);
-  app.use("/stellar/account", stellarAccountCreateRoutes);
-  app.use("/stellar/account", stellarAccountBalanceRoutes);
-  app.use("/contract", createContractStateRouter());
-
-  // Treasury management
-  app.use("/treasury", createTreasuryRouter());
-
-  // Feature flags (admin-managed)
-  app.use(createAdminFeaturesRouter());
-
-  // Evidence pin verification (admin-managed)
-  app.use(createAdminEvidenceVerificationRouter());
-
-  // Webhooks: CRUD /webhooks
-  app.use("/webhooks", webhooksRoutes);
+  // Legacy mount — same router, marked deprecated
+  app.use("/", deprecationHeaders(env.LEGACY_API_SUNSET_DATE, "/api/v1"), apiRouter);
 
   // Error handler registered last — Express 5 natively preserves middleware
   // order so it catches errors from all routes and middleware registered above.
