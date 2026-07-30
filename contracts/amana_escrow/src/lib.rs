@@ -249,6 +249,42 @@ pub struct PathPaymentExecutedEvent {
     pub dest_amount: i128,
 }
 
+/// Emitted when an upgrade proposal is created by an admin.
+#[contractevent(topics = ["amana", "UPGPRP"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpgradeProposedEvent {
+    pub proposal_id: u32,
+    pub wasm_hash: BytesN<32>,
+    pub deadline: u64,
+}
+
+/// Emitted when an admin set change is proposed.
+#[contractevent(topics = ["amana", "ADMPRP"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminChangeProposedEvent {
+    pub proposal_id: u32,
+    pub new_admins: Vec<Address>,
+    pub new_threshold: u32,
+    pub deadline: u64,
+}
+
+/// Emitted when an admin approves a proposal.
+#[contractevent(topics = ["amana", "APRPRP"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminApprovalEvent {
+    pub proposal_id: u32,
+    pub approver: Address,
+}
+
+/// Emitted when an admin set change is executed (threshold reached).
+#[contractevent(topics = ["amana", "ADMEXE"])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AdminChangeExecutedEvent {
+    pub proposal_id: u32,
+    pub new_admins: Vec<Address>,
+    pub new_threshold: u32,
+}
+
 // ---------------------------------------------------------------------------
 // Trade history — stored event record
 // ---------------------------------------------------------------------------
@@ -260,6 +296,38 @@ pub struct TradeEvent {
     pub timestamp: u64,
     pub actor: Address,
     pub data: soroban_sdk::String,
+}
+
+// ---------------------------------------------------------------------------
+// Multisig admin types
+// ---------------------------------------------------------------------------
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MultisigConfig {
+    pub admins: Vec<Address>,
+    pub threshold: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProposalOperation {
+    Upgrade(BytesN<32>),
+    UpdateFeeBps(u32),
+    AddMediator(Address),
+    RemoveMediator(Address),
+    WithdrawFees(i128, Address),
+    ChangeAdmin(Vec<Address>, u32),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Proposal {
+    pub id: u32,
+    pub operation: ProposalOperation,
+    pub proposer: Address,
+    pub deadline: u64,
+    pub executed: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +486,14 @@ pub enum DataKey {
     /// Cumulative platform fees accrued from trade completions and dispute
     /// resolutions. Admin may withdraw any portion via `withdraw_fees()`.
     AccruedFees,
+    /// Multisig admin configuration (admin set + threshold).
+    MultisigConfig,
+    /// Monotonic counter for proposal IDs.
+    NextProposalId,
+    /// Proposal data keyed by proposal ID.
+    Proposal(u32),
+    /// Set of admin addresses that have approved a proposal.
+    ProposalApprovals(u32),
     /// Monotonic storage-schema version, written at initialize() and read via
     /// get_schema_version(). Enables forward-compatible migrations without
     /// disturbing any existing key. Appended last so the XDR encoding of every
@@ -456,7 +532,8 @@ impl EscrowContract {
 
     pub fn initialize(
         env: Env,
-        admin: Address,
+        admins: Vec<Address>,
+        threshold: u32,
         cngn_contract: Address,
         treasury: Address,
         fee_bps: u32,
@@ -466,8 +543,17 @@ impl EscrowContract {
             panic!("AlreadyInitialized");
         }
         assert!(fee_bps <= MAX_FEE_BPS, "fee_bps must not exceed MAX_FEE_BPS (500)");
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::Admin, &admin);
+        let num_admins = admins.len();
+        assert!(num_admins > 0, "must have at least 1 admin");
+        assert!(threshold > 0, "threshold must be > 0");
+        assert!(threshold <= num_admins, "threshold must be <= number of admins");
+        // Require authentication from every initial admin.
+        for a in admins.iter() {
+            a.require_auth();
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::MultisigConfig, &MultisigConfig { admins: admins.clone(), threshold });
         env.storage()
             .instance()
             .set(&DataKey::CngnContract, &cngn_contract);
@@ -481,19 +567,14 @@ impl EscrowContract {
             .instance()
             .set(&DataKey::SchemaVersion, &CURRENT_SCHEMA_VERSION);
         Self::bump_instance_ttl(&env);
-        InitializedEvent { admin, fee_bps, timestamp: env.ledger().timestamp() }.publish(&env);
+        InitializedEvent { admin: admins.first().unwrap(), fee_bps, timestamp: env.ledger().timestamp() }.publish(&env);
     }
 
-    /// Register a single legacy mediator address. Only the admin may call this.
+    /// Register a single legacy mediator address. Only an admin may call this.
     /// For multi-mediator support, prefer `add_mediator()`.
     /// Emits `MediatorAdded` so governance indexers see every registration path.
-    pub fn set_mediator(env: Env, mediator: Address) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
-        admin.require_auth();
+    pub fn set_mediator(env: Env, admin: Address, mediator: Address) {
+        Self::require_admin(&env, admin);
         env.storage().instance().set(&DataKey::Mediator, &mediator);
         // Also register in the per-address registry so is_mediator() reflects this.
         env.storage()
@@ -511,13 +592,8 @@ impl EscrowContract {
 
     /// Add `mediator_address` to the approved mediator registry.
     /// Admin only. Emits `MediatorAdded`.
-    pub fn add_mediator(env: Env, mediator_address: Address) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
-        admin.require_auth();
+    pub fn add_mediator(env: Env, admin: Address, mediator_address: Address) {
+        Self::require_admin(&env, admin);
         env.storage()
             .persistent()
             .set(&DataKey::MediatorRegistry(mediator_address.clone()), &true);
@@ -531,13 +607,8 @@ impl EscrowContract {
     /// Also clears the legacy single-mediator slot if it holds the same address,
     /// ensuring revocation is complete regardless of which registration path was used.
     /// Admin only. Emits `MediatorRemoved`.
-    pub fn remove_mediator(env: Env, mediator_address: Address) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
-        admin.require_auth();
+    pub fn remove_mediator(env: Env, admin: Address, mediator_address: Address) {
+        Self::require_admin(&env, admin);
 
         // Clear registry slot (add_mediator / set_mediator dual-writes here)
         env.storage()
@@ -585,13 +656,8 @@ impl EscrowContract {
     /// Update the platform fee rate. Admin only.
     /// `new_fee_bps` must be within [`MIN_FEE_BPS`, `MAX_FEE_BPS`].
     /// Emits `FeeRateUpdated(old, new)`.
-    pub fn update_fee_bps(env: Env, new_fee_bps: u32) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
-        admin.require_auth();
+    pub fn update_fee_bps(env: Env, admin: Address, new_fee_bps: u32) {
+        Self::require_admin(&env, admin);
         assert!(
             (MIN_FEE_BPS..=MAX_FEE_BPS).contains(&new_fee_bps),
             "fee_bps out of range"
@@ -606,15 +672,10 @@ impl EscrowContract {
     }
 
     /// Withdraw accrued platform fees from the contract to `destination`.
-    /// Only the admin may call this. Reverts if `amount` is zero or exceeds
+    /// Only an admin may call this. Reverts if `amount` is zero or exceeds
     /// the currently accrued fees. Emits `FeesWithdrawn`.
-    pub fn withdraw_fees(env: Env, amount: i128, destination: Address) {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
-        admin.require_auth();
+    pub fn withdraw_fees(env: Env, admin: Address, amount: i128, destination: Address) {
+        Self::require_admin(&env, admin);
         assert!(amount > 0, "amount must be greater than zero");
         let accrued_fees: i128 = env
             .storage()
@@ -649,6 +710,294 @@ impl EscrowContract {
     }
 
     // -----------------------------------------------------------------------
+    // Multisig proposal system
+    // -----------------------------------------------------------------------
+
+    /// Propose a contract WASM upgrade.
+    /// Any admin may call this. Emits `UpgradeProposedEvent`.
+    pub fn propose_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>, deadline: u64) -> u32 {
+        Self::require_admin(&env, admin);
+        let proposal_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextProposalId)
+            .unwrap_or(1);
+        assert!(
+            deadline > env.ledger().timestamp(),
+            "deadline must be in the future"
+        );
+        let proposal = Proposal {
+            id: proposal_id,
+            operation: ProposalOperation::Upgrade(wasm_hash.clone()),
+            proposer: admin.clone(),
+            deadline,
+            executed: false,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::NextProposalId, &(proposal_id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ProposalApprovals(proposal_id), &Vec::new(&env));
+        UpgradeProposedEvent {
+            proposal_id,
+            wasm_hash,
+            deadline,
+        }
+        .publish(&env);
+        proposal_id
+    }
+
+    /// Propose a change to the admin set.
+    /// Any admin may call this. Emits `AdminChangeProposedEvent`.
+    pub fn propose_admin_change(
+        env: Env,
+        admin: Address,
+        new_admins: Vec<Address>,
+        new_threshold: u32,
+        deadline: u64,
+    ) -> u32 {
+        Self::require_admin(&env, admin);
+        let num_new = new_admins.len();
+        assert!(num_new > 0, "must have at least 1 admin");
+        assert!(new_threshold > 0, "threshold must be > 0");
+        assert!(
+            new_threshold <= num_new,
+            "threshold must be <= number of admins"
+        );
+        assert!(
+            deadline > env.ledger().timestamp(),
+            "deadline must be in the future"
+        );
+        let proposal_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextProposalId)
+            .unwrap_or(1);
+        let proposal = Proposal {
+            id: proposal_id,
+            operation: ProposalOperation::ChangeAdmin(new_admins.clone(), new_threshold),
+            proposer: admin.clone(),
+            deadline,
+            executed: false,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::NextProposalId, &(proposal_id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ProposalApprovals(proposal_id), &Vec::new(&env));
+        AdminChangeProposedEvent {
+            proposal_id,
+            new_admins,
+            new_threshold,
+            deadline,
+        }
+        .publish(&env);
+        proposal_id
+    }
+
+    /// Approve a proposal. When the approval threshold is reached the operation
+    /// auto-executes. Emits `AdminApprovalEvent`.
+    pub fn approve_proposal(env: Env, admin: Address, proposal_id: u32) {
+        Self::require_admin(&env, admin);
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
+        let mut proposal: Proposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
+        assert!(!proposal.executed, "proposal already executed");
+        assert!(
+            env.ledger().timestamp() <= proposal.deadline,
+            "proposal deadline has passed"
+        );
+        let mut approvals: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ProposalApprovals(proposal_id))
+            .unwrap_or(Vec::new(&env));
+        // Check not already approved by this admin
+        for a in approvals.iter() {
+            assert!(a != admin, "already approved by this admin");
+        }
+        approvals.push_back(admin.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::ProposalApprovals(proposal_id), &approvals);
+        AdminApprovalEvent {
+            proposal_id,
+            approver: admin,
+        }
+        .publish(&env);
+
+        // Auto-execute when threshold is reached
+        if approvals.len() >= config.threshold as usize {
+            proposal.executed = true;
+            env.storage()
+                .instance()
+                .set(&DataKey::Proposal(proposal_id), &proposal);
+            Self::execute_proposal(&env, &proposal);
+        }
+    }
+
+    /// Cancel a proposal whose deadline has passed.
+    /// Any admin may call this.
+    pub fn cancel_proposal(env: Env, admin: Address, proposal_id: u32) {
+        Self::require_admin(&env, admin);
+        let mut proposal: Proposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
+        assert!(!proposal.executed, "proposal already executed");
+        assert!(
+            env.ledger().timestamp() > proposal.deadline,
+            "proposal deadline has not yet passed"
+        );
+        proposal.executed = true;
+        env.storage()
+            .instance()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
+    }
+
+    /// Internal: execute a proposal once the approval threshold is reached.
+    fn execute_proposal(env: &Env, proposal: &Proposal) {
+        match &proposal.operation {
+            ProposalOperation::Upgrade(wasm_hash) => {
+                env.deployer().update_current_contract_wasm(wasm_hash.clone());
+            }
+            ProposalOperation::ChangeAdmin(new_admins, new_threshold) => {
+                let new_config = MultisigConfig {
+                    admins: new_admins.clone(),
+                    threshold: *new_threshold,
+                };
+                env.storage()
+                    .instance()
+                    .set(&DataKey::MultisigConfig, &new_config);
+                AdminChangeExecutedEvent {
+                    proposal_id: proposal.id,
+                    new_admins: new_admins.clone(),
+                    new_threshold: *new_threshold,
+                }
+                .publish(env);
+            }
+            ProposalOperation::UpdateFeeBps(new_fee_bps) => {
+                let old_fee_bps: u32 = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::FeeBps)
+                    .unwrap_or(0);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::FeeBps, new_fee_bps);
+                FeeRateUpdatedEvent {
+                    old_fee_bps,
+                    new_fee_bps: *new_fee_bps,
+                }
+                .publish(env);
+            }
+            ProposalOperation::AddMediator(mediator) => {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::MediatorRegistry(mediator.clone()), &true);
+                MediatorAddedEvent {
+                    mediator: mediator.clone(),
+                }
+                .publish(env);
+            }
+            ProposalOperation::RemoveMediator(mediator) => {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::MediatorRegistry(mediator.clone()));
+                if let Some(legacy) = env
+                    .storage()
+                    .instance()
+                    .get::<_, Address>(&DataKey::Mediator)
+                {
+                    if legacy == *mediator {
+                        env.storage().instance().remove(&DataKey::Mediator);
+                    }
+                }
+                MediatorRemovedEvent {
+                    mediator: mediator.clone(),
+                }
+                .publish(env);
+            }
+            ProposalOperation::WithdrawFees(amount, destination) => {
+                let accrued_fees: i128 = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::AccruedFees)
+                    .unwrap_or(0);
+                if *amount > 0 && *amount <= accrued_fees {
+                    let token: Address = env
+                        .storage()
+                        .instance()
+                        .get(&DataKey::CngnContract)
+                        .expect("Not initialized");
+                    let token_client = token::Client::new(env, &token);
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        destination,
+                        amount,
+                    );
+                    env.storage()
+                        .instance()
+                        .set(&DataKey::AccruedFees, &(accrued_fees - amount));
+                    FeesWithdrawnEvent {
+                        amount: *amount,
+                        destination: destination.clone(),
+                    }
+                    .publish(env);
+                }
+            }
+        }
+    }
+
+    /// Return a proposal by ID, or None.
+    pub fn get_proposal(env: Env, proposal_id: u32) -> Option<Proposal> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Proposal(proposal_id))
+    }
+
+    /// Return the number of approvals a proposal has received.
+    pub fn get_proposal_approval_count(env: Env, proposal_id: u32) -> u32 {
+        let approvals: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ProposalApprovals(proposal_id))
+            .unwrap_or(Vec::new(&env));
+        approvals.len() as u32
+    }
+
+    /// Upgrade the contract WASM (direct call, requires M-of-N via proposals).
+    /// This is the multisig-guarded upgrade entry point.
+    pub fn upgrade(env: Env, wasm_hash: BytesN<32>) {
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
+        // Require all admins to auth as a final safety check
+        for a in config.admins.iter() {
+            a.require_auth();
+        }
+        env.deployer().update_current_contract_wasm(wasm_hash);
+    }
+
+    // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
 
@@ -676,6 +1025,42 @@ impl EscrowContract {
         }
 
         panic!("Unauthorized mediator");
+    }
+
+    /// Verifies that `admin` is a registered multisig admin and authorizes the
+    /// call. Returns the admin address on success.
+    fn require_admin(env: &Env, admin: Address) -> Address {
+        admin.require_auth();
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
+        let mut found = false;
+        for a in config.admins.iter() {
+            if a == admin {
+                found = true;
+                break;
+            }
+        }
+        assert!(found, "Unauthorized admin");
+        admin
+    }
+
+    /// Returns true if `addr` is in the current admin set.
+    fn is_admin(env: &Env, addr: &Address) -> bool {
+        if let Some(config) = env
+            .storage()
+            .instance()
+            .get::<_, MultisigConfig>(&DataKey::MultisigConfig)
+        {
+            for a in config.admins.iter() {
+                if &a == addr {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn default_release_sequence(trade: &Trade) -> ReleaseSequence {
@@ -930,11 +1315,21 @@ impl EscrowContract {
             .expect("SourceToken not configured")
     }
 
-    /// Return the admin address.
+    /// Return the first admin address (backward-compatible accessor).
     pub fn get_admin(env: Env) -> Address {
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
+        config.admins.first().unwrap()
+    }
+
+    /// Return the full admin set and threshold.
+    pub fn get_multisig_config(env: Env) -> MultisigConfig {
         env.storage()
             .instance()
-            .get(&DataKey::Admin)
+            .get(&DataKey::MultisigConfig)
             .expect("Not initialized")
     }
 
@@ -977,13 +1372,9 @@ impl EscrowContract {
             "Trade must be in Created status"
         );
 
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
+        let caller_is_admin = Self::is_admin(&env, &caller);
         assert!(
-            caller == intent.buyer || caller == admin,
+            caller == intent.buyer || caller_is_admin,
             "Unauthorized path payment finalization"
         );
 
@@ -1028,24 +1419,20 @@ impl EscrowContract {
     pub fn cancel_trade(env: Env, trade_id: u64, caller: Address) {
         let key = DataKey::Trade(trade_id);
         let mut trade: Trade = Self::load_trade(&env, &key);
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
+        let caller_is_admin = Self::is_admin(&env, &caller);
 
         caller.require_auth();
 
         if matches!(trade.status, TradeStatus::Created) {
             assert!(
-                caller == trade.buyer || caller == trade.seller || caller == admin,
+                caller == trade.buyer || caller == trade.seller || caller_is_admin,
                 "Unauthorized caller"
             );
             Self::execute_cancellation(&env, &mut trade, 0, caller);
         } else if matches!(trade.status, TradeStatus::Funded) {
             let amount = trade.amount;
-            if caller == admin {
-                Self::execute_cancellation(&env, &mut trade, amount, admin);
+            if caller_is_admin {
+                Self::execute_cancellation(&env, &mut trade, amount, caller);
             } else {
                 assert!(
                     caller == trade.buyer || caller == trade.seller,
@@ -1321,13 +1708,9 @@ impl EscrowContract {
 
         caller.require_auth();
 
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .expect("Not initialized");
+        let caller_is_admin = Self::is_admin(&env, &caller);
         assert!(
-            caller == trade.buyer || caller == admin,
+            caller == trade.buyer || caller_is_admin,
             "Unauthorized caller"
         );
 
