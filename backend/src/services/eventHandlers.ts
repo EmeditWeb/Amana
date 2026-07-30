@@ -9,7 +9,7 @@ type TradeCreatePayload = {
   buyerAddress: string;
   sellerAddress: string;
   amountUsdc?: string;
-  status: (typeof EVENT_TO_STATUS)[EventType];
+  status: TradeStatus;
   version: number;
 };
 
@@ -38,10 +38,13 @@ async function applyStatusTransition(
     return;
   }
 
+  const newStatus = EVENT_TO_STATUS[event.eventType];
+  if (!newStatus) return;
+
   const result = await tx.trade.updateMany({
     where: { tradeId: event.tradeId, status: existing.status, version: existing.version },
     data: {
-      status: EVENT_TO_STATUS[event.eventType],
+      status: newStatus,
       version: { increment: 1 },
       updatedAt: new Date(),
     },
@@ -58,7 +61,7 @@ export async function handleTradeCreated(tx: Prisma.TransactionClient, event: Pa
     buyerAddress: (event.data.buyer as string) || "",
     sellerAddress: (event.data.seller as string) || "",
     amountUsdc: String(event.data.amount_usdc ?? "0"),
-    status: EVENT_TO_STATUS[EventType.TradeCreated],
+    status: EVENT_TO_STATUS[EventType.TradeCreated]!,
     version: 1,
   });
   logEscrowEvent({
@@ -80,7 +83,7 @@ export async function handleTradeFunded(tx: Prisma.TransactionClient, event: Par
     tradeId: event.tradeId,
     buyerAddress: "",
     sellerAddress: "",
-    status: EVENT_TO_STATUS[EventType.TradeFunded],
+    status: EVENT_TO_STATUS[EventType.TradeFunded]!,
     version: 1,
   });
   logEscrowEvent({
@@ -109,7 +112,7 @@ export async function handleDeliveryConfirmed(tx: Prisma.TransactionClient, even
     tradeId: event.tradeId,
     buyerAddress: "",
     sellerAddress: "",
-    status: EVENT_TO_STATUS[EventType.DeliveryConfirmed],
+    status: EVENT_TO_STATUS[EventType.DeliveryConfirmed]!,
     version: 1,
   });
   logEscrowEvent({
@@ -128,7 +131,7 @@ export async function handleFundsReleased(tx: Prisma.TransactionClient, event: P
     tradeId: event.tradeId,
     buyerAddress: "",
     sellerAddress: "",
-    status: EVENT_TO_STATUS[EventType.FundsReleased],
+    status: EVENT_TO_STATUS[EventType.FundsReleased]!,
     version: 1,
   });
   logEscrowEvent({
@@ -149,7 +152,7 @@ export async function handleDisputeInitiated(tx: Prisma.TransactionClient, event
     tradeId: event.tradeId,
     buyerAddress: "",
     sellerAddress: "",
-    status: EVENT_TO_STATUS[EventType.DisputeInitiated],
+    status: EVENT_TO_STATUS[EventType.DisputeInitiated]!,
     version: 1,
   });
   logEscrowEvent({
@@ -170,7 +173,7 @@ export async function handleDisputeResolved(tx: Prisma.TransactionClient, event:
     tradeId: event.tradeId,
     buyerAddress: "",
     sellerAddress: "",
-    status: EVENT_TO_STATUS[EventType.DisputeResolved],
+    status: EVENT_TO_STATUS[EventType.DisputeResolved]!,
     version: 1,
   });
   logEscrowEvent({
@@ -191,10 +194,25 @@ export async function dispatchEvent(tx: Prisma.TransactionClient, event: ParsedE
   const handlers: Record<EventType, (t: Prisma.TransactionClient, e: ParsedEvent) => Promise<void>> = {
     [EventType.TradeCreated]: handleTradeCreated,
     [EventType.TradeFunded]: handleTradeFunded,
+    [EventType.TradeCancelled]: handleTradeCancelled,
+    [EventType.TradeCancelledByBuyer]: handleTradeCancelled,
+    [EventType.TradeExpired]: handleTradeCancelled,
     [EventType.DeliveryConfirmed]: handleDeliveryConfirmed,
     [EventType.FundsReleased]: handleFundsReleased,
     [EventType.DisputeInitiated]: handleDisputeInitiated,
     [EventType.DisputeResolved]: handleDisputeResolved,
+    [EventType.EvidenceSubmitted]: handleNoop,
+    [EventType.VideoProofSubmitted]: handleNoop,
+    [EventType.ManifestSubmitted]: handleNoop,
+    [EventType.DeadlineExtended]: handleNoop,
+    [EventType.MediatorAdded]: handleNoop,
+    [EventType.MediatorRemoved]: handleNoop,
+    [EventType.FeeRateUpdated]: handleNoop,
+    [EventType.FeesWithdrawn]: handleNoop,
+    [EventType.PathPaymentInitiated]: handleNoop,
+    [EventType.PathPaymentExecuted]: handleNoop,
+    [EventType.ContractUpgraded]: handleNoop,
+    [EventType.Initialized]: handleNoop,
   };
 
   const handler = handlers[event.eventType];
@@ -203,4 +221,19 @@ export async function dispatchEvent(tx: Prisma.TransactionClient, event: ParsedE
   } else {
     appLogger.warn({ eventType: event.eventType }, "[EventHandler] Unknown event type");
   }
+}
+
+async function handleTradeCancelled(tx: Prisma.TransactionClient, event: ParsedEvent): Promise<void> {
+  await applyStatusTransition(tx, event, {
+    tradeId: event.tradeId,
+    buyerAddress: "",
+    sellerAddress: "",
+    status: TradeStatus.CANCELLED,
+    version: 1,
+  });
+  appLogger.debug({ tradeId: event.tradeId, ledger: event.ledgerSequence }, "[EventHandler] TradeCancelled");
+}
+
+async function handleNoop(_tx: Prisma.TransactionClient, _event: ParsedEvent): Promise<void> {
+  // no-op handler for informational events that don't require state transitions
 }

@@ -3,6 +3,7 @@ import { env } from '../config/env';
 
 // Ensure a single instance of Prisma Client is used across the application
 declare global {
+  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 

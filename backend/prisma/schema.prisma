@@ -277,6 +277,25 @@ model ChainEventOutbox {
   @@index([ledgerSequence])
 }
 
+/// IndexedEvent — pre-normalized on-chain event record for REST/WS query.
+/// Populated by the EventIndexerService; read by the frontend via API.
+model IndexedEvent {
+  id              Int      @id @default(autoincrement())
+  eventId         String   @db.VarChar(255)
+  tradeId         String?  @db.VarChar(255)
+  eventType       String   @db.VarChar(100)
+  ledgerSequence  Int
+  contractId      String   @db.VarChar(255)
+  txHash          String?  @db.VarChar(255)
+  payload         Json
+  ingestedAt      DateTime @default(now())
+
+  @@unique([eventId])
+  @@index([tradeId, eventType, ledgerSequence])
+  @@index([eventType, ledgerSequence])
+  @@index([ledgerSequence])
+}
+
 /// Vault model representing a savings vault on Soroban
 /// - vaultId: Unique identifier from blockchain
 /// - ownerAddress: Wallet address of vault owner (lowercase)

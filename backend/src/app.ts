@@ -42,6 +42,9 @@ import { createAdminFeaturesRouter } from "./routes/admin.features.routes";
 import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-verification.routes";
 import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
+import { createEventRouter } from "./routes/events.routes";
+import { PrismaClient } from "@prisma/client";
+import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
 
@@ -76,7 +79,9 @@ function buildCorsOptions(): cors.CorsOptions {
   };
 }
 
-export function createApp(): express.Application {
+export function createApp(
+  deps?: { prisma?: PrismaClient; eventIndexer?: EventIndexerService }
+): express.Application {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -203,6 +208,11 @@ export function createApp(): express.Application {
 
   // Webhooks: CRUD /webhooks
   app.use("/webhooks", webhooksRoutes);
+
+  // Event indexer API — requires Prisma and EventIndexerService
+  if (deps?.prisma && deps?.eventIndexer) {
+    app.use("/api/v1", createEventRouter(deps.prisma, deps.eventIndexer));
+  }
 
   // Error handler registered last — Express 5 natively preserves middleware
   // order so it catches errors from all routes and middleware registered above.
