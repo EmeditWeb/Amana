@@ -32,6 +32,12 @@ export function createMetricsRouter(): Router {
         errors: [
           "errors_total",
         ],
+        postgresql_pool: [
+          "pg_pool_active_connections",
+          "pg_pool_idle_connections",
+          "pg_pool_waiting_queries",
+          "pg_pool_timeout_total",
+        ],
       },
     });
   });

@@ -87,6 +87,55 @@ services:
           memory: 512M
     profiles: [staging]
 
+  pgbouncer-staging:
+    image: pgbouncer:1.21-alpine
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /etc/pgbouncer/pgbouncer.ini <<EOF
+        [databases]
+        amana_staging = host=postgres-staging port=5432 dbname=amana_staging
+
+        [pgbouncer]
+        listen_addr = 0.0.0.0
+        listen_port = 6432
+        auth_type = md5
+        auth_file = /etc/pgbouncer/userlist.txt
+        pool_mode = transaction
+        max_client_conn = 100
+        default_pool_size = 15
+        reserve_pool_size = 5
+        reserve_pool_timeout = 10
+        server_idle_timeout = 600
+        server_lifetime = 3600
+        log_connections = 1
+        log_disconnections = 1
+        log_pooler_errors = 1
+        stats_period = 60
+        EOF
+        echo "${STAGING_PGBOUNCER_USER:-postgres}:${STAGING_PGBOUNCER_PASSWORD:-staging-password}" > /etc/pgbouncer/userlist.txt
+        exec pgbouncer -u pgbouncer -d /etc/pgbouncer/pgbouncer.ini
+    environment:
+      STAGING_PGBOUNCER_USER: ${STAGING_PGBOUNCER_USER:-postgres}
+      STAGING_PGBOUNCER_PASSWORD: ${STAGING_PGBOUNCER_PASSWORD:-staging-password}
+    ports:
+      - "${STAGING_PGBOUNCER_PORT:-6432}:6432"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgbouncer", "-show", "stats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    profiles: [staging]
+
   redis-staging:
     image: redis:7-alpine
     command: redis-server --requirepass ${STAGING_REDIS_PASSWORD:-staging-redis-pass}
