@@ -1,0 +1,14 @@
+# Known false positives for the `database-url-with-password` rule: local
+# dev/staging placeholder passwords ("password", "staging-password") in
+# scripts and the Prisma schema's example connection-string comment — not
+# real secrets. Regenerate with:
+#   gitleaks dir . --config .gitleaks.toml --no-banner -r /tmp/report.json
+#   jq -r '.[].Fingerprint' /tmp/report.json
+backend/prisma/schema.prisma:database-url-with-password:9
+scripts/test-up.sh:database-url-with-password:40
+scripts/test-up.sh:database-url-with-password:51
+scripts/staging-up.sh:database-url-with-password:63
+scripts/staging-up.sh:database-url-with-password:68
+scripts/staging-validate.sh:database-url-with-password:16
+scripts/migrate-safe.sh:database-url-with-password:40
+scripts/migrate-rollback.sh:database-url-with-password:48

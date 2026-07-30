@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup-verify-daily
+  namespace: amana
+spec:
+  # Runs after db-backup-daily (0 2 * * *) completes.
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # a failed verification should alert immediately, not silently retry
+      activeDeadlineSeconds: 600 # 10 minutes — script tears down its own scratch DB on success
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: db-backup-verify
+              image: ghcr.io/kingfrankhood/amana/db-backup:latest
+              command: ["/scripts/verify-backup.sh", "--type=daily"]
+              envFrom:
+                - secretRef:
+                    name: db-backup-secret
+                - secretRef:
+                    name: db-backup-verify-secret
+                - configMapRef:
+                    name: db-backup-config
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+---
+# Secret template — populate with real values via Sealed Secrets / External Secrets.
+# VERIFY_DATABASE_URL must point at the SAME server as db-backup-secret's
+# DATABASE_URL, differing only in dbname — the script creates and drops
+# this database on every run, so it must never be a real database.
+# kubectl create secret generic db-backup-verify-secret -n amana \
+#   --from-literal=VERIFY_DATABASE_URL=postgresql://.../backup_verify

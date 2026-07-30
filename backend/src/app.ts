@@ -27,6 +27,7 @@ import { createHealthDetailRouter } from "./routes/health.detail.routes";
 import { createNotificationPreferencesRouter } from "./routes/notifications.preferences.routes";
 import { createNotificationsRouter } from "./routes/notifications.inapp.routes";
 import { createMetricsRouter } from "./routes/metrics.routes";
+import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
@@ -96,13 +97,19 @@ export function createApp(
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
-          imgSrc: ["'self'", "data:"],
-          connectSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https://ipfs.io", "https://*.pinata.cloud"],
+          connectSrc: [
+            "'self'",
+            "https://api.stellar.org",
+            "https://horizon.stellar.org",
+            "https://horizon-testnet.stellar.org",
+          ],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
+          reportUri: ["/api/v1/csp-violation"],
         },
       },
       crossOriginEmbedderPolicy: true,
@@ -149,6 +156,9 @@ export function createApp(
 
   // Prometheus metrics endpoint
   app.use(createMetricsRouter());
+
+  // CSP violation report collection endpoint (helmet's reportUri above)
+  app.use(createCspRouter());
 
   app.use("/auth", authRoutes);
   app.use("/wallet", walletRoutes);
