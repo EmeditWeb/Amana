@@ -87,3 +87,39 @@ recurrence (with owners and rough timing - not necessarily a hard deadline).
 Link the postmortem from the incident's tracking issue. P2/P3 incidents get
 a postmortem at the reporter's discretion - always write one if the same
 class of issue has recurred.
+
+## Backup verification
+
+`db-backup-verify-daily` (`infra/k8s/cronjob-backup-verify.yaml`) runs
+`scripts/verify-backup.sh` every day, an hour after `db-backup-daily`
+completes. It restores the latest backup into a scratch database
+(`VERIFY_DATABASE_URL`, created and dropped on every run) and checks:
+
+- Every production table exists in the restored backup, with a row count
+  that isn't larger than production's (a larger count indicates a corrupted
+  or wrong backup was restored) and isn't zero when production has data.
+- No orphaned foreign keys in the restored backup.
+- Every table with a `created_at` column has *some* data in the backup if
+  production has data (catches a backup that silently missed writes).
+
+**If `BackupVerificationFailed` fires** (P1 — a broken backup is not yet an
+outage, but treat it with urgency):
+
+1. Check the failed Job's logs (`kubectl logs -n amana job/db-backup-verify-daily-<timestamp>`)
+   for which specific check(s) failed — logged per-table, per-constraint.
+2. The scratch database is deliberately **left in place on failure** (not
+   torn down) — connect to it directly to investigate further before the
+   next scheduled run overwrites it.
+3. If the failure indicates the backup itself is bad (not a script bug),
+   treat this as a live gap in disaster-recovery coverage until the next
+   backup cycle produces a verified-good backup — do not assume the
+   *previous* verified-good backup is still an acceptable RPO if it's now
+   more than one backup cycle old.
+4. If the failure is a false positive (e.g. a legitimate large data purge
+   dropped production's row count below a stale backup's), that's a gap in
+   the check's heuristics — file it, don't just silence the alert.
+
+**If `BackupVerificationNotRunRecently` fires**: the CronJob itself may be
+disabled, the cluster scheduler may be unhealthy, or a prior failed run's
+`concurrencyPolicy: Forbid` may be blocking new runs — check
+`kubectl get cronjob db-backup-verify-daily -n amana` first.

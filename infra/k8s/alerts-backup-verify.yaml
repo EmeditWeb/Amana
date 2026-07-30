@@ -1,0 +1,44 @@
+# Requires the Prometheus Operator + kube-state-metrics (not verified to be
+# installed in this cluster — adapt the metric names below if a different
+# monitoring stack is in use). kube-state-metrics exports Job success/failure
+# as `kube_job_status_succeeded` / `kube_job_status_failed` for every
+# CronJob-spawned Job, including `db-backup-verify-daily`, without the
+# verification script itself needing to push a custom metric to anything —
+# there's no Prometheus Pushgateway in this repo's infra to push to.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: amana-backup-verification-alerts
+  namespace: amana
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: backup-verification
+      rules:
+        - alert: BackupVerificationFailed
+          expr: |
+            kube_job_status_failed{job_name=~"db-backup-verify-daily-.*", namespace="amana"} > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Daily backup verification failed"
+            description: >-
+              The db-backup-verify-daily CronJob's most recent run failed.
+              See docs/runbooks/incident-response.md#backup-verification for
+              triage steps. A failed backup means the most recent backup may
+              be corrupted, incomplete, or unrestorable.
+
+        - alert: BackupVerificationNotRunRecently
+          expr: |
+            (time() - max(kube_job_status_completion_time{job_name=~"db-backup-verify-daily-.*", namespace="amana"})) > 86400 * 2
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backup verification has not completed in over 48 hours"
+            description: >-
+              No successful db-backup-verify-daily run has completed in the
+              last 48 hours (expected: daily). The CronJob itself may be
+              disabled, stuck, or the cluster's scheduler may be unhealthy.
