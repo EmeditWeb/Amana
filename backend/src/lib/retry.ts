@@ -62,7 +62,7 @@ export async function retryAsync<T>(
 
   let retryCount = 0;
 
-  while (true) {
+  while (true) { // eslint-disable-line no-constant-condition
     try {
       return await operation();
     } catch (error) {
