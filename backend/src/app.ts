@@ -27,6 +27,7 @@ import { createHealthDetailRouter } from "./routes/health.detail.routes";
 import { createNotificationPreferencesRouter } from "./routes/notifications.preferences.routes";
 import { createNotificationsRouter } from "./routes/notifications.inapp.routes";
 import { createMetricsRouter } from "./routes/metrics.routes";
+import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
@@ -42,6 +43,9 @@ import { createAdminFeaturesRouter } from "./routes/admin.features.routes";
 import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-verification.routes";
 import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
+import { createEventRouter } from "./routes/events.routes";
+import { PrismaClient } from "@prisma/client";
+import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
 
@@ -76,7 +80,9 @@ function buildCorsOptions(): cors.CorsOptions {
   };
 }
 
-export function createApp(): express.Application {
+export function createApp(
+  deps?: { prisma?: PrismaClient; eventIndexer?: EventIndexerService }
+): express.Application {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -91,13 +97,19 @@ export function createApp(): express.Application {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
-          imgSrc: ["'self'", "data:"],
-          connectSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https://ipfs.io", "https://*.pinata.cloud"],
+          connectSrc: [
+            "'self'",
+            "https://api.stellar.org",
+            "https://horizon.stellar.org",
+            "https://horizon-testnet.stellar.org",
+          ],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
+          reportUri: ["/api/v1/csp-violation"],
         },
       },
       crossOriginEmbedderPolicy: true,
@@ -144,6 +156,9 @@ export function createApp(): express.Application {
 
   // Prometheus metrics endpoint
   app.use(createMetricsRouter());
+
+  // CSP violation report collection endpoint (helmet's reportUri above)
+  app.use(createCspRouter());
 
   app.use("/auth", authRoutes);
   app.use("/wallet", walletRoutes);
@@ -203,6 +218,11 @@ export function createApp(): express.Application {
 
   // Webhooks: CRUD /webhooks
   app.use("/webhooks", webhooksRoutes);
+
+  // Event indexer API — requires Prisma and EventIndexerService
+  if (deps?.prisma && deps?.eventIndexer) {
+    app.use("/api/v1", createEventRouter(deps.prisma, deps.eventIndexer));
+  }
 
   // Error handler registered last — Express 5 natively preserves middleware
   // order so it catches errors from all routes and middleware registered above.

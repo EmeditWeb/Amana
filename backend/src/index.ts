@@ -5,6 +5,8 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { prisma } from "./lib/db";
 import { EventListenerService } from "./services/eventListener.service";
+import { EventIndexerService } from "./services/event-indexer";
+import { EventStreamService } from "./services/event-stream";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { appLogger } from "./middleware/logger";
@@ -18,7 +20,8 @@ import { evidenceVerificationQueue, trustScoreRecalculationQueue } from "./jobs/
 // Initialize distributed tracing before any other imports
 initializeTracing();
 
-const app = createApp();
+const eventIndexerService = new EventIndexerService(prisma);
+const app = createApp({ prisma, eventIndexer: eventIndexerService });
 const port = env.PORT;
 
 const docsDir = path.join(__dirname, "docs");
@@ -94,7 +97,7 @@ async function bootstrap() {
     }
   }
 
-  app.listen(port, async () => {
+  const server = app.listen(port, async () => {
     appLogger.info({ port }, "Amana backend listening");
 
     try {
@@ -102,6 +105,20 @@ async function bootstrap() {
       appLogger.info("EventListenerService started successfully");
     } catch (error) {
       appLogger.error({ error }, "Failed to start EventListenerService");
+    }
+
+    try {
+      await eventIndexerService.start();
+      appLogger.info("EventIndexerService started successfully");
+    } catch (error) {
+      appLogger.error({ error }, "Failed to start EventIndexerService");
+    }
+
+    try {
+      new EventStreamService(server);
+      appLogger.info("EventStreamService initialized");
+    } catch (error) {
+      appLogger.warn({ error }, "Failed to initialize EventStreamService");
     }
 
     // Start evidence verification worker for async jobs
