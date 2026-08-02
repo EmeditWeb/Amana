@@ -70,7 +70,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} font-sans bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} font-sans bg-primary text-text-primary antialiased`}
       >
         <ThemeProvider>
           <AnalyticsProvider>
