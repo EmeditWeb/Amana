@@ -6,8 +6,13 @@ import Link from "next/link";
 import { signTransaction } from "@stellar/freighter-api";
 import { useAuth } from "@/hooks/useAuth";
 import { useTradeDetail } from "@/hooks/useTradeDetail";
+<<<<<<< ours
 import { useWallet } from "@/hooks/useWallet";
 import { ApiError } from "@/lib/api";
+=======
+import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { api, ApiError } from "@/lib/api";
+>>>>>>> theirs
 import { apiConfig } from "@/lib/api";
 
 function formatDate(dateString: string) {
@@ -90,9 +95,14 @@ export default function TradeDetailPage() {
   const tradeId = params?.id ?? "UNKNOWN";
 
   const { token, address, isAuthenticated } = useAuth();
+<<<<<<< ours
   const { trade, isLoading, error, refetch, deposit, confirmDelivery, releaseFunds, raiseDispute } =
     useTradeDetail(tradeId);
   const { balance, asset } = useWallet();
+=======
+  const { trade, loading, error, refetch } = useTradeDetail(tradeId);
+  const { balance, asset } = useWalletBalance();
+>>>>>>> theirs
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
