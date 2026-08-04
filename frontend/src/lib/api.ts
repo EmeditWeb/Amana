@@ -2,7 +2,12 @@ import { authApi } from "./api/auth";
 import { ApiError } from "./api/client";
 import { disputesApi } from "./api/disputes";
 import { evidenceApi } from "./api/evidence";
-import { getApiBaseUrl, getStellarNetworkPassphrase, getStellarRpcUrl } from "./api/env";
+import {
+  getApiBaseUrl,
+  getStellarHorizonUrl,
+  getStellarNetworkPassphrase,
+  getStellarRpcUrl,
+} from "./api/env";
 import { reputationApi } from "./api/reputation";
 import { searchApi } from "./api/search";
 import { tradesApi } from "./api/trades";
@@ -49,6 +54,7 @@ export const apiConfig = {
   getBaseUrl: getApiBaseUrl,
   getStellarRpcUrl,
   getStellarNetworkPassphrase,
+  getStellarHorizonUrl,
 };
 
 export { ApiError };
