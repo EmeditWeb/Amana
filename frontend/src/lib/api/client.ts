@@ -103,31 +103,13 @@ export async function request<T>(
   } = options;
 
   const authToken = token ?? (!skipAuth ? getStoredToken() : null);
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout =
-    timeoutMs > 0
-      ? setTimeout(() => {
-          timedOut = true;
-          controller.abort();
-        }, timeoutMs)
-      : undefined;
-  const abortRequest = () => controller.abort();
-
-  if (signal?.aborted) {
-    controller.abort();
-  } else {
-    signal?.addEventListener("abort", abortRequest, { once: true });
-  }
+  const isFormData =
+    typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
 
   try {
     const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...fetchOptions,
-      headers: createHeaders(
-        headers,
-        authToken,
-        fetchOptions.body instanceof FormData,
-      ),
+      headers: createHeaders(headers, authToken, isFormData),
       signal: controller.signal,
     });
 
