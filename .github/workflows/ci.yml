@@ -160,6 +160,11 @@ jobs:
         run: pnpm lint
         working-directory: mobile
 
+      - name: Mobile test
+        if: matrix.stack == 'mobile'
+        run: pnpm test
+        working-directory: mobile
+
       - name: Mobile security audit
         if: matrix.stack == 'mobile'
         run: pnpm audit --audit-level=high
