@@ -2,7 +2,11 @@ import { Worker, Job } from 'bullmq';
 import { createQueueConnection, ExportJobData } from '../queue';
 import { prisma } from '../../lib/db';
 import { Parser as CsvParser } from 'json2csv';
+<<<<<<< ours
 import { getJobContextualLogger } from '../../lib/logging';
+=======
+import { bullJobDuration, bullJobFailedTotal } from '../../lib/bullMetrics';
+>>>>>>> theirs
 
 export interface ExportResult {
   format: 'csv' | 'json';
@@ -28,33 +32,48 @@ export function createExportWorker(): Worker<ExportJobData> {
     async (job: Job<ExportJobData>): Promise<ExportResult> => {
       const { requestedBy, format, tradeIds, filters } = job.data;
       void filters;
+<<<<<<< ours
       const logger = getJobContextualLogger(job.id, undefined, { requestedBy, format });
       logger.info('Processing export job');
+=======
+      appLogger.info({ jobId: job.id, requestedBy, format }, 'Processing export job');
+      const start = performance.now();
+>>>>>>> theirs
 
-      const where: Record<string, unknown> = { ...filters };
-      if (tradeIds?.length) {
-        where['tradeId'] = { in: tradeIds };
-      }
+      try {
+        const where: Record<string, unknown> = { ...filters };
+        if (tradeIds?.length) {
+          where['tradeId'] = { in: tradeIds };
+        }
 
-      const trades = await prisma.trade.findMany({ where });
+        const trades = await prisma.trade.findMany({ where });
 
-      let data: string;
-      if (format === 'csv') {
-        const parser = new CsvParser();
-        data = parser.parse(trades);
-      } else {
-        data = JSON.stringify(trades, null, 2);
-      }
+        let data: string;
+        if (format === 'csv') {
+          const parser = new CsvParser();
+          data = parser.parse(trades);
+        } else {
+          data = JSON.stringify(trades, null, 2);
+        }
 
-      const s3Key = `exports/${requestedBy}/${job.id}.${format}`;
-      const s3Uri = await uploadToS3(data, s3Key);
+        const s3Key = `exports/${requestedBy}/${job.id}.${format}`;
+        const s3Uri = await uploadToS3(data, s3Key);
 
+<<<<<<< ours
       logger.info(
         { rowCount: trades.length, s3Uri },
         'Export job completed',
       );
+=======
+        bullJobDuration.record((performance.now() - start) / 1000, { queue: 'exports', job_type: format });
+        appLogger.info({ jobId: job.id, rowCount: trades.length, s3Uri }, 'Export job completed');
+>>>>>>> theirs
 
-      return { format, data, rowCount: trades.length, s3Key: s3Uri };
+        return { format, data, rowCount: trades.length, s3Key: s3Uri };
+      } catch (err) {
+        bullJobFailedTotal.add(1, { queue: 'exports', job_type: format, error_code: 'error' });
+        throw err;
+      }
     },
     { connection: createQueueConnection() },
   );

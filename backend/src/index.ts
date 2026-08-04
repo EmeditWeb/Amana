@@ -14,7 +14,9 @@ import { initializeTracing } from "./config/tracing";
 import { HealthService } from "./services/health.service";
 import { createEvidenceVerificationWorker } from "./jobs/workers/evidence-verification.worker";
 import { createTrustScoreRecalculationWorker } from "./jobs/workers/trust-score-recalculation.worker";
-import { evidenceVerificationQueue, trustScoreRecalculationQueue } from "./jobs/queue";
+import { createIdempotencyCleanupWorker, scheduleIdempotencyCleanup } from "./jobs/workers/idempotency-cleanup.worker";
+import { evidenceVerificationQueue, trustScoreRecalculationQueue, webhookQueue, notificationQueue, exportQueue } from "./jobs/queue";
+import { registerQueueForMetrics, startQueueMetricsCollection } from "./lib/bullMetrics";
 
 
 // Initialize distributed tracing before any other imports
@@ -107,6 +109,7 @@ async function bootstrap() {
       appLogger.error({ error }, "Failed to start EventListenerService");
     }
 
+<<<<<<< ours
     try {
       await eventIndexerService.start();
       appLogger.info("EventIndexerService started successfully");
@@ -120,6 +123,15 @@ async function bootstrap() {
     } catch (error) {
       appLogger.warn({ error }, "Failed to initialize EventStreamService");
     }
+=======
+    // Register BullMQ queues for Prometheus metrics and start collection
+    registerQueueForMetrics("webhooks", webhookQueue);
+    registerQueueForMetrics("notifications", notificationQueue);
+    registerQueueForMetrics("exports", exportQueue);
+    registerQueueForMetrics("evidence-verification", evidenceVerificationQueue);
+    registerQueueForMetrics("trust-score-recalculation", trustScoreRecalculationQueue);
+    startQueueMetricsCollection();
+>>>>>>> theirs
 
     // Start evidence verification worker for async jobs
     try {
@@ -135,6 +147,15 @@ async function bootstrap() {
       appLogger.info("TrustScoreRecalculationWorker started");
     } catch (error) {
       appLogger.error({ error }, "Failed to start TrustScoreRecalculationWorker");
+    }
+
+    // Start idempotency key GC worker and schedule daily cron
+    try {
+      createIdempotencyCleanupWorker();
+      await scheduleIdempotencyCleanup();
+      appLogger.info("IdempotencyCleanupWorker started");
+    } catch (error) {
+      appLogger.error({ error }, "Failed to start IdempotencyCleanupWorker");
     }
 
     // Schedule periodic evidence pin verification

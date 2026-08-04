@@ -1,0 +1,49 @@
+diff a/backend/src/services/trade.service.ts b/backend/src/services/trade.service.ts	(rejected hunks)
+@@ -5,6 +5,7 @@ import { prisma as defaultPrisma } from "../lib/db";
+ import { ContractService } from "./contract.service";
+ import { appLogger } from "../middleware/logger";
+ import { TracingHelper } from "../config/tracing";
++import { cacheService } from "../lib/cache";
+ 
+ let _adminPubkeysCache: Set<string> | null = null;
+ 
+@@ -196,11 +197,11 @@ export class TradeService {
+       orConditions.push({ id: numericId });
+     }
+ 
+-    const trade = await this.prisma.trade.findFirst({
+-      where: {
+-        OR: orConditions,
+-      },
+-    });
++    const trade = await cacheService.getOrSet<Trade | null>(
++      `cache:trade:${id}`,
++      60,
++      () => this.prisma.trade.findFirst({ where: { OR: orConditions } }),
++    );
+ 
+     if (!trade) {
+       return null;
+@@ -218,6 +219,13 @@ export class TradeService {
+     return trade;
+   }
+ 
++  private async invalidateTradeCache(id: string, tradeId?: string): Promise<void> {
++    await cacheService.invalidateOne(`cache:trade:${id}`);
++    if (tradeId && tradeId !== id) {
++      await cacheService.invalidateOne(`cache:trade:${tradeId}`);
++    }
++  }
++
+   async getUserStats(address: string) {
+     const trades = await this.prisma.trade.findMany({
+       where: {
+@@ -337,6 +345,8 @@ export class TradeService {
+           },
+         });
+ 
++        await this.invalidateTradeCache(id, trade.tradeId);
++
+         return { unsignedXdr };
+       },
+       { attributes: { "trade.id": id } },
