@@ -2,7 +2,6 @@ import { getSupabaseClient } from "../lib/supabase";
 import { UpdateProfileInput, updateProfileSchema } from "../validators/user.validators";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { StrKey } from "@stellar/stellar-sdk";
-import { cacheService } from "../lib/cache";
 
 /** 
  * Find a user by wallet address or create a new one if not exists.
@@ -97,7 +96,6 @@ export async function updateUser(address: string, input: UpdateProfileInput) {
       throw new AppError(ErrorCode.INFRA_ERROR, 'Update failed', 500);
     }
 
-    await cacheService.invalidateOne(`cache:user:${normalizedAddress}`);
     return data;
   } catch (error: any) {
     if (error.name === 'AppError') throw error;
@@ -116,27 +114,21 @@ export async function getPublicProfile(address: string) {
   const supabase = getSupabaseClient();
   const normalizedAddress = address.toLowerCase();
 
-  return cacheService.getOrSet(
-    `cache:user:${normalizedAddress}`,
-    300,
-    async () => {
-      try {
-        const { data, error } = await supabase
-          .from("users")
-          .select("address, display_name, avatar_url, created_at")
-          .eq("address", normalizedAddress)
-          .single();
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("address, display_name, avatar_url, created_at")
+      .eq("address", normalizedAddress)
+      .single();
 
-        if (error) {
-          if (error.code === "PGRST116") return null;
-          throw new AppError(ErrorCode.INFRA_ERROR, 'Fetch failed', 500);
-        }
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      throw new AppError(ErrorCode.INFRA_ERROR, 'Fetch failed', 500);
+    }
 
-        return data;
-      } catch (error: any) {
-        if (error.name === 'AppError') throw error;
-        throw new AppError(ErrorCode.INFRA_ERROR, 'User service dependency failure', 503);
-      }
-    },
-  );
+    return data;
+  } catch (error: any) {
+    if (error.name === 'AppError') throw error;
+    throw new AppError(ErrorCode.INFRA_ERROR, 'User service dependency failure', 503);
+  }
 }

@@ -3,7 +3,6 @@ import { EventType, ParsedEvent, EVENT_TO_STATUS } from "../types/events";
 import { appLogger } from "../middleware/logger";
 import { webhookService } from "./webhook.service";
 import { logEscrowEvent } from "../lib/escrowAudit";
-import { feeAccountingService } from "./feeAccounting.service";
 
 type TradeCreatePayload = {
   tradeId: string;
@@ -135,11 +134,6 @@ export async function handleFundsReleased(tx: Prisma.TransactionClient, event: P
     status: EVENT_TO_STATUS[EventType.FundsReleased]!,
     version: 1,
   });
-
-  // Record the 1% platform fee for this completed trade
-  const amountUsdc = event.data.amount_usdc != null ? String(event.data.amount_usdc) : "0";
-  await feeAccountingService.recordFee(tx, event.tradeId, amountUsdc, event.ledgerSequence);
-
   logEscrowEvent({
     tradeId: event.tradeId,
     eventType: "FundsReleased",
@@ -182,11 +176,6 @@ export async function handleDisputeResolved(tx: Prisma.TransactionClient, event:
     status: EVENT_TO_STATUS[EventType.DisputeResolved]!,
     version: 1,
   });
-
-  // Record the 1% platform fee for dispute-resolved (completed) trades
-  const amountUsdc = event.data.amount_usdc != null ? String(event.data.amount_usdc) : "0";
-  await feeAccountingService.recordFee(tx, event.tradeId, amountUsdc, event.ledgerSequence);
-
   logEscrowEvent({
     tradeId: event.tradeId,
     eventType: "DisputeResolved",

@@ -1,8 +1,0 @@
-diff a/.gitignore b/.gitignore	(rejected hunks)
-@@ -32,3 +32,6 @@ gitleaks-report.sarif
- *.pem
- .env.tracing
- .env.tracing.example
-+
-+# Git worktrees (local dev workspaces)
-+.worktrees/

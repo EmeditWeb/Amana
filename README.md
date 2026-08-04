@@ -170,27 +170,18 @@ Amana includes comprehensive distributed tracing with OpenTelemetry for end-to-e
 
 See [DISTRIBUTED_TRACING_GUIDE.md](./DISTRIBUTED_TRACING_GUIDE.md) for detailed setup and usage instructions.
 
-<<<<<<< ours
 **Application Metrics & Monitoring**:
 - **[Prometheus Metrics](./docs/PROMETHEUS_METRICS.md)** — Trade throughput, dispute counts, and processing latency metrics exposed at `/metrics`
 
-=======
->>>>>>> theirs
 #### System Architecture & Data Flow
 
 - **[System Architecture](./docs/architecture.md)** — High-level architecture overview, component interactions, and deployment topology
 - **[Sequence Diagrams](./docs/sequence-diagrams.md)** — Detailed workflow sequences for trade creation, dispute resolution, audit trails, and more
-<<<<<<< ours
 - **[Audit Logging](./docs/audit-logging.md)** — Tamper-evident audit trail with cryptographic signatures and verification
 - **[Mediator Dashboard Spec](./docs/mediator-dashboard-spec.md)** — Complete specification for mediator dashboard including user stories, UI mockups, and implementation tasks
 
 **Testing & Quality Assurance**:
 - **[Visual Regression Testing](./docs/VISUAL_REGRESSION_TESTING.md)** — Frontend UI regression tests using Playwright with multi-viewport support
-=======
-- **[Data Model & Relationships](./docs/data-model-relationships.md)** — Complete database schema and entity relationships
-- **[Audit Logging](./docs/audit-logging.md)** — Tamper-evident audit trail with cryptographic signatures and verification
-- **[Event Flow](./docs/event-flow.md)** — State machine and event propagation throughout the system
->>>>>>> theirs
 
 ---
 

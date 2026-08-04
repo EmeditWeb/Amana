@@ -32,6 +32,3 @@ gitleaks-report.sarif
 *.pem
 .env.tracing
 .env.tracing.example
-
-# Git worktrees (local dev workspaces)
-.worktrees/

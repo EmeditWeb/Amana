@@ -7,7 +7,6 @@ import { tracingMiddleware } from './middleware/tracing.middleware';
 import loggerMiddleware from './middleware/logger';
 import { requestLoggerMiddleware } from "./middleware/request.logger.middleware";
 import securityHeaders from "./middleware/securityHeaders";
-import { apiVersionHeader, deprecationHeaders } from "./middleware/apiVersion.middleware";
 import { authRoutes } from "./routes/auth.routes";
 import { walletRoutes } from "./routes/wallet.routes";
 import { createTradeRouter } from "./routes/trade.routes";
@@ -32,7 +31,6 @@ import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
-import { createFeeAccountingRouter } from "./routes/fees.routes";
 import userRoutes from "./routes/user.routes";
 import reputationRoutes from "./routes/reputation.routes";
 import { stellarFeesRoutes } from "./routes/stellar.fees";
@@ -152,14 +150,13 @@ export function createApp(
   // Structured per-request logger: method, path, status, durationMs, correlationId, userId, userAgent, ip
   app.use(requestLoggerMiddleware);
 
-  // Enhanced health check with deep introspection — not versioned (operational endpoint)
+  // Enhanced health check with deep introspection
   app.use("/health", createHealthRouter());
   app.use("/health", createHealthDetailRouter());
 
-  // Prometheus metrics endpoint — not versioned (operational endpoint)
+  // Prometheus metrics endpoint
   app.use(createMetricsRouter());
 
-<<<<<<< ours
   // CSP violation report collection endpoint (helmet's reportUri above)
   app.use(createCspRouter());
 
@@ -213,69 +210,14 @@ export function createApp(
   // Treasury management
   app.use("/treasury", createTreasuryRouter());
 
-  // Platform fee accounting & reporting (admin-only)
-  app.use("/fees", createFeeAccountingRouter());
-
   // Feature flags (admin-managed)
   app.use(createAdminFeaturesRouter());
-=======
-  // ── Build the versioned resource router (all API routes) ──────────────────
-  // This single router instance is mounted twice:
-  //   1. /api/v1  — canonical, gets X-API-Version: 1
-  //   2. /        — legacy unprefixed paths, gets Deprecation/Sunset headers
-  // Operational endpoints (/health, /metrics-info) are intentionally excluded.
-  function buildApiRouter(): express.Router {
-    const r = express.Router();
 
-    r.use("/auth", authRoutes);
-    r.use("/wallet", walletRoutes);
-    r.use("/users", userRoutes);
-    r.use("/users", reputationRoutes);
-    r.use("/users", createTrustScoreRouter());
-    r.use(createNotificationPreferencesRouter());
-    r.use(createNotificationsRouter());
+  // Evidence pin verification (admin-managed)
+  app.use(createAdminEvidenceVerificationRouter());
 
-    // These literal routes must precede the generic /trades/:id handler.
-    r.use("/trades", createTradeExportRouter());
-    r.use("/trades", createTradeTemplateRouter());
-    r.use("/trades", createTradeWatchlistRouter());
-    r.use("/trades", createTradeEvidenceRouter());
-    r.use("/trades", createEscrowReleaseRouter());
-    r.use("/trades", createEscrowScheduleRouter());
-    r.use("/trades", createTradeRouter());
-    r.use("/trades", createTradeNotesRouter());
-    r.use("/trades/:id/manifest", createTradeManifestRouter());
-    r.use("/trades/:id/manifest", createManifestRouter());
-    r.use(createEvidenceRouter());
-    r.use("/trades", createAuditTrailRouter());
-
-    r.use("/goals", createGoalsRouter());
-    r.use("/disputes", disputeRoutes);
-    r.use("/dispute-categories", disputeCategoryRoutes);
-
-    r.use("/stellar/fees", stellarFeesRoutes);
-    r.use("/stellar/tx", stellarTxStatusRoutes);
-    r.use("/stellar/assets", stellarAssetRoutes);
-    r.use("/stellar/account", stellarAccountCreateRoutes);
-    r.use("/stellar/account", stellarAccountBalanceRoutes);
-    r.use("/contract", createContractStateRouter());
-
-    r.use("/treasury", createTreasuryRouter());
-    r.use(createAdminFeaturesRouter());
-    r.use(createAdminEvidenceVerificationRouter());
-    r.use("/webhooks", webhooksRoutes);
-
-    return r;
-  }
-
-  const apiRouter = buildApiRouter();
->>>>>>> theirs
-
-  // Versioned mount — canonical path, advertises version
-  app.use("/api/v1", apiVersionHeader(1), apiRouter);
-
-  // Legacy mount — same router, marked deprecated
-  app.use("/", deprecationHeaders(env.LEGACY_API_SUNSET_DATE, "/api/v1"), apiRouter);
+  // Webhooks: CRUD /webhooks
+  app.use("/webhooks", webhooksRoutes);
 
   // Event indexer API — requires Prisma and EventIndexerService
   if (deps?.prisma && deps?.eventIndexer) {

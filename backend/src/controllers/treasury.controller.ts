@@ -1,18 +1,18 @@
-import type { Response, NextFunction } from "express";
+import type { Response } from "express";
 import { AuthRequest } from "../services/auth.service";
 import { TreasuryService } from "../services/treasury.service";
+import { appLogger } from "../middleware/logger";
 import * as StellarSdk from "@stellar/stellar-sdk";
-import { getContextualLogger, logErrorWithContext } from "../lib/logging";
 
 export class TreasuryController {
   constructor(private readonly treasuryService: TreasuryService = new TreasuryService()) {}
 
-  getBalance = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  getBalance = async (_req: AuthRequest, res: Response): Promise<Response | void> => {
     try {
       const balance = await this.treasuryService.getBalance();
       return res.status(200).json(balance);
     } catch (error) {
-      logErrorWithContext(req, error, { stage: 'get_treasury_balance' }, "Failed to get treasury balance");
+      appLogger.error({ error }, "Failed to get treasury balance");
       return res.status(500).json({ error: "Failed to get treasury balance" });
     }
   };
@@ -39,20 +39,19 @@ export class TreasuryController {
       return res.status(200).json(result);
     } catch (error) {
       if (error instanceof Error && error.message === "Only admin can withdraw treasury funds") {
-        logErrorWithContext(req, error, { destination, stage: 'treasury_withdrawal', authorizationError: true }, "Treasury withdrawal unauthorized");
         return res.status(403).json({ error: error.message });
       }
-      logErrorWithContext(req, error, { destination, stage: 'treasury_withdrawal' }, "Treasury withdrawal failed");
+      appLogger.error({ error }, "Treasury withdrawal failed");
       return res.status(500).json({ error: "Treasury withdrawal failed" });
     }
   };
 
-  getConfig = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+  getConfig = async (_req: AuthRequest, res: Response): Promise<Response | void> => {
     try {
       const config = this.treasuryService.getConfig();
       return res.status(200).json(config);
     } catch (error) {
-      logErrorWithContext(req, error, { stage: 'get_treasury_config' }, "Failed to get treasury config");
+      appLogger.error({ error }, "Failed to get treasury config");
       return res.status(500).json({ error: "Failed to get treasury config" });
     }
   };

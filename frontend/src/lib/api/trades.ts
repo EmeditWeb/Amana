@@ -4,7 +4,6 @@ import type {
   CreateTradeResponse,
   DepositResponse,
   EvidenceResponse,
-  EvidenceUploadResponse,
   SubmitManifestRequest,
   SubmitManifestResponse,
   TradeHistoryResponse,
@@ -14,13 +13,12 @@ import type {
 } from "./types";
 
 export const tradesApi = {
-  list: (token: string, params?: { status?: string; page?: number; limit?: number; sort?: string }) =>
+  list: (token: string, params?: { status?: string; page?: number; limit?: number }) =>
     request<TradeListResponse>(
       `/trades${createQueryString({
         status: params?.status,
         page: params?.page,
         limit: params?.limit,
-        sort: params?.sort,
       })}`,
       { token },
     ),
@@ -33,18 +31,6 @@ export const tradesApi = {
 
   getEvidence: (token: string, id: string) =>
     request<EvidenceResponse>(`/trades/${id}/evidence`, { token }),
-
-  uploadEvidence: (token: string, tradeId: string, file: File) => {
-    const formData = new FormData();
-    formData.append("tradeId", tradeId);
-    formData.append("file", file);
-
-    return request<EvidenceUploadResponse>("/evidence/video", {
-      method: "POST",
-      token,
-      body: formData,
-    });
-  },
 
   submitManifest: (token: string, tradeId: string, data: SubmitManifestRequest) =>
     request<SubmitManifestResponse>(`/trades/${tradeId}/manifest`, {

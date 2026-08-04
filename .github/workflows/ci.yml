@@ -27,7 +27,6 @@ on:
       - ".github/workflows/ci.yml"
       - "frontend/**"
       - "backend/**"
-      - "mobile/**"
       - "contracts/**"
       - "scripts/**"
       - "infra/**"
@@ -243,7 +242,6 @@ jobs:
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.28.0
         with:
-<<<<<<< ours
           scan-type: fs
           scan-ref: ${{ matrix.stack }}
           format: sarif
@@ -257,31 +255,6 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.stack }}.sarif
           category: trivy-${{ matrix.stack }}
-=======
-          node-version: 20
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
-
-      - name: Install deps
-        if: needs.changes.outputs.mobile == 'true'
-        run: npm ci --legacy-peer-deps
-
-      - name: Type check
-        if: needs.changes.outputs.mobile == 'true'
-        run: npm run type-check
-
-      - name: Lint
-        if: needs.changes.outputs.mobile == 'true'
-        run: npm run lint
-
-      - name: Test
-        if: needs.changes.outputs.mobile == 'true'
-        run: npm test
-
-      - name: Skip note (no mobile changes)
-        if: needs.changes.outputs.mobile != 'true'
-        run: echo "No mobile file changes detected, required gate passed."
->>>>>>> theirs
 
   contract-tests:
     name: Frontend ↔ Backend Pact contracts

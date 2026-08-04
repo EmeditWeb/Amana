@@ -7,7 +7,6 @@ import { NavLink } from "@/components/ui/Navigation";
 import { useSidebarState } from "@/components/layout/SidebarStateProvider";
 import { useTranslation } from "@/hooks/useTranslation";
 import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 // #445 — include Trades so the canonical shell highlights the active route;
 // this eliminates the need for a redundant page-level title that duplicated
@@ -70,7 +69,6 @@ export function AppTopNav() {
       {/* Right side */}
       <div className="ml-auto flex items-center gap-3">
         <LanguageSwitcher />
-        <ThemeToggle />
 
         {/* Notification bell */}
         <button className="w-8 h-8 rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-elevated transition-all">

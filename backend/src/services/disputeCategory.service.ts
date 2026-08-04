@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
-import { cacheService } from "../lib/cache";
 
 export interface DisputeCategoryData {
   name: string;
@@ -52,23 +51,16 @@ export class DisputeCategoryService {
       },
     });
 
-    await cacheService.invalidate("cache:dispute-categories:*");
     return this.formatCategory(category);
   }
 
   async listCategories(includeInactive = false): Promise<DisputeCategoryResponse[]> {
-    const cacheKey = includeInactive ? "cache:dispute-categories:all" : "cache:dispute-categories:active";
-    return cacheService.getOrSet(
-      cacheKey,
-      3600,
-      async () => {
-        const categories = await this.prisma.disputeCategory.findMany({
-          where: includeInactive ? undefined : { isActive: true },
-          orderBy: { name: "asc" },
-        });
-        return categories.map(this.formatCategory);
-      },
-    );
+    const categories = await this.prisma.disputeCategory.findMany({
+      where: includeInactive ? undefined : { isActive: true },
+      orderBy: { name: "asc" },
+    });
+
+    return categories.map(this.formatCategory);
   }
 
   async getCategoryById(id: number): Promise<DisputeCategoryResponse> {
@@ -112,7 +104,6 @@ export class DisputeCategoryService {
       },
     });
 
-    await cacheService.invalidate("cache:dispute-categories:*");
     return this.formatCategory(category);
   }
 
@@ -126,8 +117,6 @@ export class DisputeCategoryService {
       where: { id },
       data: { isActive: false },
     });
-
-    await cacheService.invalidate("cache:dispute-categories:*");
   }
 
   async validateCategoryId(categoryId: number): Promise<boolean> {

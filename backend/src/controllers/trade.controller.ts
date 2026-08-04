@@ -7,6 +7,7 @@ import {
   buildReleaseFundsTx,
   ContractService,
 } from "../services/contract.service";
+import { appLogger } from "../middleware/logger";
 import {
   TradeAccessDeniedError,
   TradeService,
@@ -15,7 +16,6 @@ import {
 } from "../services/trade.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
-import { getContextualLogger, logErrorWithContext, logBusinessEvent } from "../lib/logging";
 
 const AMOUNT_USDC_PATTERN = /^\d+(?:\.\d{1,7})?$/;
 
@@ -118,11 +118,10 @@ export class TradeController {
         sellerLossBps: sellerBps,
       });
 
-      logBusinessEvent(req, 'trade_created', { tradeId, buyerAddress, sellerAddress, amountUsdc: normalizedAmountUsdc });
       return res.status(201).json({ tradeId, unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) return next(error);
-      logErrorWithContext(req, error, { stage: 'trade_creation' }, "Trade creation failed");
+      appLogger.error({ error }, "Trade creation failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to create trade", 500),
       );
@@ -174,7 +173,7 @@ export class TradeController {
       if (error instanceof TradeAccessDeniedError) {
         return next(new AppError(ErrorCode.TRADE_ACCESS_DENIED, "Forbidden", 403));
       }
-      logErrorWithContext(req, error, { tradeId, stage: 'deposit_tx_build' }, "Deposit transaction build failed");
+      appLogger.error({ error }, "Deposit transaction build failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to build deposit transaction", 500),
       );
@@ -353,7 +352,7 @@ export class TradeController {
         return next(new AppError(ErrorCode.TRADE_NOT_FOUND, "Trade not found", 404));
       }
 
-      logErrorWithContext(req, error, { tradeId: id, stage: 'dispute_initiation' }, "Dispute initiation failed");
+      appLogger.error({ error }, "Dispute initiation failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to initiate dispute", 500),
       );

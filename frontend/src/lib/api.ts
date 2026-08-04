@@ -1,18 +1,9 @@
 import { authApi } from "./api/auth";
 import { ApiError } from "./api/client";
 import { disputesApi } from "./api/disputes";
-<<<<<<< ours
 import { evidenceApi } from "./api/evidence";
 import { getApiBaseUrl, getStellarNetworkPassphrase, getStellarRpcUrl } from "./api/env";
 import { reputationApi } from "./api/reputation";
-=======
-import {
-  getApiBaseUrl,
-  getStellarHorizonUrl,
-  getStellarNetworkPassphrase,
-  getStellarRpcUrl,
-} from "./api/env";
->>>>>>> theirs
 import { searchApi } from "./api/search";
 import { tradesApi } from "./api/trades";
 import { walletApi } from "./api/wallet";
@@ -26,10 +17,8 @@ export type {
   DisputeResponse,
   EvidenceRecord,
   EvidenceResponse,
-  EvidenceUploadResponse,
   PathPaymentQuote,
-  ResolveDisputeRequest,
-  ResolveDisputeResponse,
+  ReputationResponse,
   SearchResponse,
   SearchResultItem,
   TradeHistoryEvent,
@@ -47,11 +36,8 @@ export type {
 export const api = {
   auth: authApi,
   disputes: disputesApi,
-<<<<<<< ours
   evidence: evidenceApi,
   reputation: reputationApi,
-=======
->>>>>>> theirs
   search: searchApi,
   trades: tradesApi,
   wallet: walletApi,
@@ -61,7 +47,6 @@ export const apiConfig = {
   getBaseUrl: getApiBaseUrl,
   getStellarRpcUrl,
   getStellarNetworkPassphrase,
-  getStellarHorizonUrl,
 };
 
 export { ApiError };

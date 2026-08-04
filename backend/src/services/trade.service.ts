@@ -5,7 +5,6 @@ import { prisma as defaultPrisma } from "../lib/db";
 import { ContractService } from "./contract.service";
 import { appLogger } from "../middleware/logger";
 import { TracingHelper } from "../config/tracing";
-import { cacheService } from "../lib/cache";
 
 let _adminPubkeysCache: Set<string> | null = null;
 
@@ -197,11 +196,11 @@ export class TradeService {
       orConditions.push({ id: numericId });
     }
 
-    const trade = await cacheService.getOrSet<Trade | null>(
-      `cache:trade:${id}`,
-      60,
-      () => this.prisma.trade.findFirst({ where: { OR: orConditions } }),
-    );
+    const trade = await this.prisma.trade.findFirst({
+      where: {
+        OR: orConditions,
+      },
+    });
 
     if (!trade) {
       return null;
@@ -217,13 +216,6 @@ export class TradeService {
     }
 
     return trade;
-  }
-
-  private async invalidateTradeCache(id: string, tradeId?: string): Promise<void> {
-    await cacheService.invalidateOne(`cache:trade:${id}`);
-    if (tradeId && tradeId !== id) {
-      await cacheService.invalidateOne(`cache:trade:${tradeId}`);
-    }
   }
 
   async getUserStats(address: string) {
@@ -344,8 +336,6 @@ export class TradeService {
             categoryId: resolvedCategoryId,
           },
         });
-
-        await this.invalidateTradeCache(id, trade.tradeId);
 
         return { unsignedXdr };
       },

@@ -13,7 +13,7 @@ import {
 } from "@/components/vault";
 import { DriverManifestForm, LoadingState, type DriverManifestData } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
-import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useWallet } from "@/hooks/useWallet";
 import {
   api,
   apiConfig,
@@ -58,7 +58,7 @@ export default function VaultPage() {
     authenticate,
   } = useAuth();
 
-  const { balance, asset } = useWalletBalance();
+  const { balance, asset } = useWallet();
 
   const [stats, setStats] = useState<TradeStatsResponse | null>(null);
   const [recentTrades, setRecentTrades] = useState<TradeListResponse | null>(null);
