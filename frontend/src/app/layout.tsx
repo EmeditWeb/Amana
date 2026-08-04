@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ToastProvider } from "@/hooks/useToast";
+import { ThemeProvider } from "@/hooks/useTheme";
 import RegisterSW from "@/components/RegisterSW";
 import { LocaleSync } from "@/components/LocaleSync";
 
@@ -51,20 +52,38 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('amana-theme');
+                  if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} font-sans bg-primary text-text-primary antialiased`}
       >
-        <AnalyticsProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <LocaleSync />
-              <AppShell>{children}</AppShell>
-              <RegisterSW />
-              <ToastContainer />
-            </ToastProvider>
-          </AuthProvider>
-        </AnalyticsProvider>
+        <ThemeProvider>
+          <AnalyticsProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <LocaleSync />
+                <AppShell>{children}</AppShell>
+                <RegisterSW />
+                <ToastContainer />
+              </ToastProvider>
+            </AuthProvider>
+          </AnalyticsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
