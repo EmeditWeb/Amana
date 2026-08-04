@@ -1,0 +1,78 @@
+diff --git a/docs/adr/ADR-006-reputation-and-trust-score-model.md b/docs/adr/ADR-006-reputation-and-trust-score-model.md
+new file mode 100644
+index 0000000..1adbd3c
+--- /dev/null
++++ b/docs/adr/ADR-006-reputation-and-trust-score-model.md
+@@ -0,0 +1,39 @@
++# ADR-006: Reputation and Trust Score Model
++
++## Status
++
++Proposed
++
++## Context
++
++Amana needs a clear way to help buyers, sellers, and drivers assess whether a counterpart is likely to behave well before they open a trade or dispute. The platform already exposes reputation and trust-score endpoints in the backend, but the scoring model needs to be explicit so it is explainable to users, resilient to manipulation, and consistent across the API, frontend, and analytics tooling.
++
++The model must balance several goals:
++
++- Reward successful completion of trades.
++- Penalize disputes and losses without making the score overly punitive for normal risk.
++- Avoid requiring the user to manually maintain a score.
++- Be simple enough for the frontend to display and for operators to reason about.
++
++A purely "number of completed trades" approach would overvalue low-volume users and would not reflect the fact that a disputed or abandoned trade is a meaningful signal.
++
++## Decision
++
++1. **Use a single normalized trust-score value from 0 to 100.** The backend computes one numeric trust score per wallet and exposes it through the reputation and trust-score APIs. The score is intended to be a coarse risk signal rather than a legal or financial guarantee.
++2. **Calculate the score from a mix of behavior and history.** The initial implementation uses:
++   - a base score,
++   - a bonus for completed trades,
++   - a bonus for trading volume milestones,
++   - penalties for initiated disputes and lost disputes,
++   - a decay factor so older activity contributes less over time.
++3. **Keep the score server-side and derived from platform data.** Trust-score values are computed by the backend from trade and dispute history rather than trusting client-supplied values. This prevents users from self-reporting or tampering with the score.
++4. **Expose both a summary score and a breakdown.** The API returns the final score, the contributing components (completion bonus, volume bonus, penalties, decay), and a short event history so the frontend can explain why the score changed.
++5. **Treat reputation as an aggregation of user history, not a separate on-chain truth source.** Reputation is derived from the same trade and dispute records, and is used for presentation and risk assessment rather than for enforcing transfer logic on-chain.
++
++## Consequences
++
++- **Positive:** The score is explainable, consistent, and easy to display in the UI. It helps users make better decisions without needing to inspect raw trade history.
++- **Positive:** The backend can update and recalibrate the score centrally as business rules evolve, which is easier to maintain than distributing scoring logic across clients.
++- **Negative:** The score is an approximation and will be imperfect for edge cases. A user with a small number of trades may still be treated as low-trust even if their recent behavior has been strong.
++- **Negative:** The model depends on accurate trade and dispute data. If disputes are under-recorded or status transitions are inconsistent, the score becomes less meaningful.
++- **Follow-up:** If the platform later introduces richer risk models (for example, role-specific scoring or a dispute-weighted confidence band), this ADR should be revisited and superseded.
+diff --git a/docs/adr/ADR-007-mediator-governance-and-policy-model.md b/docs/adr/ADR-007-mediator-governance-and-policy-model.md
+new file mode 100644
+index 0000000..3f4681b
+--- /dev/null
++++ b/docs/adr/ADR-007-mediator-governance-and-policy-model.md
+@@ -0,0 +1,27 @@
++# ADR-007: Mediator Governance and Policy Model
++
++## Status
++
++Proposed
++
++## Context
++
++Amana relies on mediators to resolve disputes when buyers and sellers disagree about delivery, quality, or payout. Mediator intervention is a critical trust anchor for the platform, but it also creates risk: an unauthorized actor could interfere with dispute resolution, a mediator could act inconsistently, or the policy could drift over time as the product evolves.
++
++The system therefore needs a policy model that defines who can act as a mediator, how policies are enforced, and how the platform keeps dispute outcomes consistent and auditable.
++
++## Decision
++
++1. **Use a centralized mediator allowlist for authorization.** The backend reads mediator and arbitrator addresses from a shared configuration source (`ADMIN_STELLAR_PUBKEYS`) rather than allowing each route to independently parse the environment. This avoids drift between controllers and services.
++2. **Treat mediators as privileged operators, not ordinary users.** Only addresses in the allowlist can access mediator-specific routes, transition dispute state, or review disputes that are not directly assigned to them. This keeps dispute resolution constrained to a known operator set.
++3. **Keep mediator policy simple and auditable.** The contract and backend should rely on explicit dispute outcomes and recorded evidence rather than hidden or implicit rules. Every decision should be visible through the dispute record, event logs, and audit trail.
++4. **Separate policy from dispute logic.** The system should not embed ad hoc mediator behavior into the core escrow payout calculations. Instead, the contract evaluates the payout based on the mediator's ruling and the parties' pre-agreed risk-sharing parameters, while the backend records the rationale and evidence.
++5. **Require a clear evidence trail for all mediator actions.** Dispute decisions, status transitions, and any rationale entered by a mediator should be captured in the platform's audit trail so that disputes can be reviewed later by operators or support staff.
++
++## Consequences
++
++- **Positive:** The mediator layer is easier to reason about and safer to operate because authorization and policy are centralized.
++- **Positive:** The audit trail strengthens trust in dispute outcomes and makes later review or incident response easier.
++- **Negative:** The current model depends on a relatively small, centrally managed mediator pool. That improves control but also creates operational concentration risk if the allowlist is misconfigured or under-resourced.
++- **Negative:** The policy is intentionally conservative. It favors safety and accountability over a more flexible, community-governed mediator model.
++- **Follow-up:** If Amana later introduces a larger or more decentralized mediator network, this ADR should be revisited to define qualification, onboarding, rotation, and SLA expectations.
