@@ -1,4 +1,4 @@
-import type { Counter, Histogram } from "@opentelemetry/api";
+import type { Counter, Gauge, Histogram } from "@opentelemetry/api";
 import { MeterProvider } from "@opentelemetry/sdk-metrics";
 
 class MetricsService {
@@ -18,6 +18,12 @@ class MetricsService {
   // General processing metrics
   private requestDurationHistogram: Histogram;
   private errorCounter: Counter;
+
+  // PostgreSQL pool metrics
+  private pgPoolActiveConnections: Gauge;
+  private pgPoolIdleConnections: Gauge;
+  private pgPoolWaitingQueries: Gauge;
+  private pgPoolTimeoutTotal: Counter;
 
   private constructor(meterProvider: MeterProvider) {
     this.meterProvider = meterProvider;
@@ -90,6 +96,40 @@ class MetricsService {
       description: "Total number of errors encountered",
       unit: "1",
     });
+
+    // PostgreSQL pool metrics
+    this.pgPoolActiveConnections = meter.createGauge(
+      "pg_pool_active_connections",
+      {
+        description: "Number of active PostgreSQL connections in the pool",
+        unit: "1",
+      }
+    );
+
+    this.pgPoolIdleConnections = meter.createGauge(
+      "pg_pool_idle_connections",
+      {
+        description: "Number of idle PostgreSQL connections in the pool",
+        unit: "1",
+      }
+    );
+
+    this.pgPoolWaitingQueries = meter.createGauge(
+      "pg_pool_waiting_queries",
+      {
+        description: "Number of queries waiting for a connection from the pool",
+        unit: "1",
+      }
+    );
+
+    this.pgPoolTimeoutTotal = meter.createCounter(
+      "pg_pool_timeout_total",
+      {
+        description:
+          "Total number of connections that waited too long for a pool connection",
+        unit: "1",
+      }
+    );
   }
 
   static getInstance(
@@ -146,6 +186,21 @@ class MetricsService {
 
   recordError(attributes?: Record<string, string | number | boolean>) {
     this.errorCounter.add(1, attributes);
+  }
+
+  // PostgreSQL pool metrics
+  recordPoolMetrics(
+    activeConnections: number,
+    idleConnections: number,
+    waitingQueries: number
+  ) {
+    this.pgPoolActiveConnections.record(activeConnections);
+    this.pgPoolIdleConnections.record(idleConnections);
+    this.pgPoolWaitingQueries.record(waitingQueries);
+  }
+
+  recordPoolTimeout() {
+    this.pgPoolTimeoutTotal.add(1);
   }
 
   getMeterProvider(): MeterProvider {
