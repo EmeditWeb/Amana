@@ -26,8 +26,10 @@ export type {
   DisputeResponse,
   EvidenceRecord,
   EvidenceResponse,
+  EvidenceUploadResponse,
   PathPaymentQuote,
-  ReputationResponse,
+  ResolveDisputeRequest,
+  ResolveDisputeResponse,
   SearchResponse,
   SearchResultItem,
   TradeHistoryEvent,
@@ -45,8 +47,11 @@ export type {
 export const api = {
   auth: authApi,
   disputes: disputesApi,
+<<<<<<< ours
   evidence: evidenceApi,
   reputation: reputationApi,
+=======
+>>>>>>> theirs
   search: searchApi,
   trades: tradesApi,
   wallet: walletApi,

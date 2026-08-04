@@ -46,6 +46,7 @@ export const navigationHelpers = {
 function createHeaders(
   headers?: HeadersInit,
   token?: string | null,
+<<<<<<< ours
   skipDefaultContentType = false,
 ): Record<string, string> {
   const resolvedHeaders: Record<string, string> = skipDefaultContentType
@@ -53,6 +54,13 @@ function createHeaders(
     : {
         "Content-Type": "application/json",
       };
+=======
+  isFormData = false,
+): Record<string, string> {
+  const resolvedHeaders: Record<string, string> = isFormData
+    ? {}
+    : { "Content-Type": "application/json" };
+>>>>>>> theirs
 
   if (headers instanceof Headers) {
     headers.forEach((value, key) => {
@@ -103,32 +111,22 @@ export async function request<T>(
   } = options;
 
   const authToken = token ?? (!skipAuth ? getStoredToken() : null);
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout =
-    timeoutMs > 0
-      ? setTimeout(() => {
-          timedOut = true;
-          controller.abort();
-        }, timeoutMs)
-      : undefined;
-  const abortRequest = () => controller.abort();
-
-  if (signal?.aborted) {
-    controller.abort();
-  } else {
-    signal?.addEventListener("abort", abortRequest, { once: true });
-  }
+  const isFormData =
+    typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
 
   try {
     const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...fetchOptions,
+<<<<<<< ours
       headers: createHeaders(
         headers,
         authToken,
         fetchOptions.body instanceof FormData,
       ),
       signal: controller.signal,
+=======
+      headers: createHeaders(headers, authToken, isFormData),
+>>>>>>> theirs
     });
 
     const data = await response.json().catch(() => null);
