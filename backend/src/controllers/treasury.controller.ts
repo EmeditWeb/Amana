@@ -1,8 +1,8 @@
-import type { Response, NextFunction } from "express";
+import type { Response } from "express";
 import { AuthRequest } from "../services/auth.service";
 import { TreasuryService } from "../services/treasury.service";
 import * as StellarSdk from "@stellar/stellar-sdk";
-import { getContextualLogger, logErrorWithContext } from "../lib/logging";
+import { logErrorWithContext } from "../lib/logging";
 
 export class TreasuryController {
   constructor(private readonly treasuryService: TreasuryService = new TreasuryService()) {}
@@ -18,13 +18,13 @@ export class TreasuryController {
   };
 
   withdraw = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+    const { destination, amount } = req.body as { destination?: unknown; amount?: unknown };
     try {
       const callerAddress = req.user?.walletAddress;
       if (!callerAddress) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const { destination, amount } = req.body as { destination?: unknown; amount?: unknown };
       if (!destination || typeof destination !== "string") {
         return res.status(400).json({ error: "Destination address is required" });
       }

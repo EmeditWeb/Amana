@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { Options } from 'express-rate-limit';
 import { NextFunction, Request, Response } from 'express';
 import { RateLimitPreset } from '../config/rateLimit';
 import { ErrorCode } from '../errors/errorCodes';
@@ -95,7 +95,7 @@ function createRateLimiter(preset: RateLimitPreset, keyGenerator: KeyGenerator) 
       req: Request,
       res: Response,
       _next: NextFunction,
-      options: { message?: string | unknown; windowMs?: number; max?: number },
+      options: Options,
     ) => {
       const retryAfterSeconds = Math.ceil((options.windowMs ?? preset.windowMs) / 1000);
       const key = keyGenerator(req);

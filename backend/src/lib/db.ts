@@ -1,6 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { env } from '../config/env';
-import { recordPoolMetrics, recordPoolTimeout } from './metrics';
 
 // Ensure a single instance of Prisma Client is used across the application
 declare global {
@@ -15,8 +14,6 @@ const prismaClientSingleton = () => {
 
   client.$use(async (params: Prisma.MiddlewareParams, next: (params: Prisma.MiddlewareParams) => Promise<unknown>) => {
     const model = String(params.model ?? "");
-    const operation = params.action;
-    const startTime = Date.now();
 
     const data = params.args?.data as Record<string, unknown> | undefined;
 
@@ -39,14 +36,7 @@ const prismaClientSingleton = () => {
       }
     }
 
-    try {
-      const result = await next(params);
-      const durationMs = Date.now() - startTime;
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      throw error;
-    }
+    return next(params);
   });
 
   return client;

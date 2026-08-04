@@ -15,7 +15,7 @@ import {
 } from "../services/trade.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
-import { getContextualLogger, logErrorWithContext, logBusinessEvent } from "../lib/logging";
+import { logErrorWithContext, logBusinessEvent } from "../lib/logging";
 
 const AMOUNT_USDC_PATTERN = /^\d+(?:\.\d{1,7})?$/;
 
@@ -134,8 +134,8 @@ export class TradeController {
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
+    const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     try {
-      const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       if (!tradeId) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Trade id is required", 400);
       }
@@ -292,8 +292,8 @@ export class TradeController {
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
+    const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     try {
-      const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       if (!tradeId) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Trade id is required", 400);
       }
@@ -353,7 +353,7 @@ export class TradeController {
         return next(new AppError(ErrorCode.TRADE_NOT_FOUND, "Trade not found", 404));
       }
 
-      logErrorWithContext(req, error, { tradeId: id, stage: 'dispute_initiation' }, "Dispute initiation failed");
+      logErrorWithContext(req, error, { tradeId, stage: 'dispute_initiation' }, "Dispute initiation failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to initiate dispute", 500),
       );

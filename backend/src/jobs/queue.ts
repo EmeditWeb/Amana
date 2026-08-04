@@ -4,7 +4,6 @@ import IORedis from 'ioredis';
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 
 export function createQueueConnection(): IORedis {
-  // @ts-expect-error - ioredis URL+options constructor is valid at runtime
   return new IORedis(REDIS_URL, { maxRetriesPerRequest: null, enableReadyCheck: false });
 }
 
