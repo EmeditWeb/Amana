@@ -1,15 +1,17 @@
 import { Worker, Job } from 'bullmq';
-import { appLogger } from '../../middleware/logger';
 import { createQueueConnection, NotificationJobData } from '../queue';
 import { prisma } from '../../lib/db';
 import type { Prisma } from '@prisma/client';
+import { getJobContextualLogger } from '../../lib/logging';
 
 export function createNotificationWorker(): Worker<NotificationJobData> {
   return new Worker<NotificationJobData>(
     'notifications',
     async (job: Job<NotificationJobData>) => {
       const { userAddress, type, title, message, metadata } = job.data;
-      appLogger.info({ jobId: job.id, userAddress, type }, 'Processing notification job');
+      const logger = getJobContextualLogger(job.id, undefined, { userAddress, type });
+
+      logger.info('Processing notification job');
 
       if (type === 'in_app') {
         await prisma.inAppNotification.create({
@@ -23,10 +25,10 @@ export function createNotificationWorker(): Worker<NotificationJobData> {
         });
       } else {
         // email / push: log intent; extend with provider integration
-        appLogger.info({ jobId: job.id, type, userAddress }, `${type} notification dispatched`);
+        logger.info(`${type} notification dispatched`);
       }
 
-      appLogger.info({ jobId: job.id, userAddress }, 'Notification job completed');
+      logger.info('Notification job completed');
     },
     { connection: createQueueConnection() },
   );
