@@ -31,6 +31,7 @@ import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
+import { createFeeAccountingRouter } from "./routes/fees.routes";
 import userRoutes from "./routes/user.routes";
 import reputationRoutes from "./routes/reputation.routes";
 import { stellarFeesRoutes } from "./routes/stellar.fees";
@@ -209,6 +210,9 @@ export function createApp(
 
   // Treasury management
   app.use("/treasury", createTreasuryRouter());
+
+  // Platform fee accounting & reporting (admin-only)
+  app.use("/fees", createFeeAccountingRouter());
 
   // Feature flags (admin-managed)
   app.use(createAdminFeaturesRouter());
