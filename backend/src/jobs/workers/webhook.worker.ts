@@ -1,16 +1,19 @@
 import { Worker, Job } from 'bullmq';
-import { appLogger } from '../../middleware/logger';
 import { createQueueConnection, WebhookJobData } from '../queue';
 import { webhookService } from '../../services/webhook.service';
+import { getJobContextualLogger } from '../../lib/logging';
+
 export function createWebhookWorker(): Worker<WebhookJobData> {
   return new Worker<WebhookJobData>(
     'webhooks',
     async (job: Job<WebhookJobData>) => {
       const { tradeId, status, payload } = job.data;
-      appLogger.info({ jobId: job.id, tradeId, status }, 'Processing webhook job');
+      const logger = getJobContextualLogger(job.id, undefined, { tradeId, status });
+
+      logger.info('Processing webhook job');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await webhookService.dispatch(tradeId, status as any, payload);
-      appLogger.info({ jobId: job.id, tradeId }, 'Webhook job completed');
+      logger.info('Webhook job completed');
     },
     { connection: createQueueConnection() },
   );
