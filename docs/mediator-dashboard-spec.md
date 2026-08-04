@@ -129,6 +129,210 @@ The Mediator Dashboard is a dedicated interface enabling mediators to efficientl
   - Distribution of outcomes
 - [ ] Export resolved cases as CSV
 
+## UI/UX Mockups
+
+### 1. Dashboard Home (Dispute List)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Amana Mediator Dashboard                            [Settings]    │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ Open Disputes (12)                                                │
+│                                                                    │
+│ ┌─────────────────────────────────────────────────────────────┐  │
+│ │ Filters: [Pending ▼] [Sort: Date ▼] [Search: ___________]  │  │
+│ └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│ ┌─────────────────────────────────────────────────────────────┐  │
+│ │ Trade ID  │ Amount │ Reason          │ Initiated │ Status   │  │
+│ ├───────────┼────────┼─────────────────┼───────────┼──────────┤  │
+│ │ trade-042 │ 500000 │ Non-delivery    │ 2h ago    │ [Review] │  │
+│ │ trade-038 │ 250000 │ Quality issue   │ 5h ago    │ [Review] │  │
+│ │ trade-035 │ 100000 │ Partial damage  │ 1d ago    │ [Review] │  │
+│ │ trade-032 │ 750000 │ Substitution    │ 2d ago    │ [Review] │  │
+│ └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│ Resolved Cases (156)  [View All]                                  │
+│ Average Resolution: 4.2 days | Success Rate: 98.5%               │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 2. Case Detail View (Tabs)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Case: trade-042 │ Amount: 500,000 USDC │ Status: Reviewing       │
+├──────────────────────────────────────────────────────────────────┤
+│ [Overview] [Audit Trail] [Evidence] [Notes] [Resolution]         │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ OVERVIEW TAB                                                       │
+│                                                                    │
+│ Dispute Information:                                              │
+│ ├─ Initiator: Buyer (GC...)                                      │
+│ ├─ Reason: Non-delivery                                          │
+│ ├─ Date Initiated: 2026-01-15 10:30 UTC                         │
+│ └─ Duration: 2 hours 45 minutes                                 │
+│                                                                    │
+│ Trade Information:                                                │
+│ ├─ Buyer: GC...1234                                              │
+│ ├─ Seller: GC...5678                                             │
+│ ├─ Amount: 500,000 USDC                                          │
+│ ├─ Status: FUNDED                                                │
+│ ├─ Loss Ratio: 50/50                                            │
+│ └─ Created: 2026-01-15 07:00 UTC                               │
+│                                                                    │
+│ Delivery Information:                                             │
+│ ├─ Vehicle: ABC-123                                              │
+│ ├─ Expected Delivery: 2026-01-16 14:00 UTC                      │
+│ └─ Status: NOT CONFIRMED                                         │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 3. Audit Trail Tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Case: trade-042 │ Audit Trail                   [Verify] [Export]│
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ ✓ Signature Verified (Ed25519)                                   │
+│   Key ID: 2026-01 | Hash: 8b9c2f... | Timestamp: now            │
+│                                                                    │
+│ Timeline:                                                         │
+│                                                                    │
+│ 2026-01-15 07:00 UTC - CREATED                                   │
+│   Actor: Buyer (GC...1234)                                       │
+│   Amount: 500,000 USDC                                           │
+│                                                                    │
+│ 2026-01-15 07:30 UTC - FUNDED                                   │
+│   Actor: Buyer (GC...1234)                                       │
+│   Status: Escrow locked                                          │
+│                                                                    │
+│ 2026-01-15 08:00 UTC - MANIFEST_SUBMITTED                       │
+│   Actor: Seller (GC...5678)                                      │
+│   Vehicle: ABC-123                                              │
+│   Expected Delivery: 2026-01-16 14:00 UTC                      │
+│                                                                    │
+│ 2026-01-15 10:30 UTC - DISPUTE_INITIATED                        │
+│   Actor: Buyer (GC...1234)                                       │
+│   Reason: Non-delivery                                           │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 4. Evidence Tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Case: trade-042 │ Evidence (4 items)                              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ Evidence Gallery:                                                  │
+│                                                                    │
+│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐             │
+│ │[IMAGE]       │  │[VIDEO ICON]  │  │[IMAGE]       │             │
+│ │photo.jpg     │  │delivery.mp4  │  │receipt.png   │             │
+│ │2026-01-15    │  │15 seconds    │  │2026-01-15    │             │
+│ │By: Seller    │  │By: Buyer     │  │By: Buyer     │             │
+│ │CID: bafy...  │  │CID: bafy...  │  │CID: bafy...  │             │
+│ └──────────────┘  └──────────────┘  └──────────────┘             │
+│                                                                    │
+│ Evidence Details:                                                  │
+│                                                                    │
+│ [1] photo.jpg (Image)                                            │
+│     Uploaded: 2026-01-15 09:15 UTC                              │
+│     Uploader: Seller (GC...5678)                                │
+│     File Size: 2.4 MB                                            │
+│     IPFS Hash: bafybeic2x5...                                   │
+│     [Download] [View] [Verify]                                  │
+│                                                                    │
+│ [2] delivery.mp4 (Video)                                         │
+│     Uploaded: 2026-01-15 10:20 UTC                              │
+│     Uploader: Buyer (GC...1234)                                 │
+│     Duration: 15 seconds                                         │
+│     File Size: 8.7 MB                                            │
+│     IPFS Hash: bafybeic9x8...                                   │
+│     [Download] [Play] [Verify]                                  │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 5. Notes Tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Case: trade-042 │ Assessment Notes                                │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ Add Note: [Rich text editor with markdown support]               │
+│                                                                    │
+│ ┌──────────────────────────────────────────────────────────────┐ │
+│ │ **Evidence Review Summary:**                                │ │
+│ │                                                              │ │
+│ │ - Seller provided photo at 09:15, shows package sealed    │ │
+│ │ - Buyer submitted video at 10:20 showing damaged goods    │ │
+│ │ - Timeline consistent with transit timeline                │ │
+│ │ - Damage appears consistent with impact during delivery   │ │
+│ │                                                              │ │
+│ │ **Assessment:**                                             │ │
+│ │ Evidence supports buyer's claim of damage during delivery  │ │
+│ │ Loss ratio applies: recommend 50/50 split.                │ │
+│ │                                                              │ │
+│ │ [Post Note]                                                │ │
+│ └──────────────────────────────────────────────────────────────┘ │
+│                                                                    │
+│ Notes History:                                                    │
+│ ─────────────────────────────────────────────────────────────    │
+│ 2026-01-15 11:00 UTC - Mediator Alpha                           │
+│ "Initial review complete. Evidence is consistent."               │
+│                                                                    │
+│ 2026-01-15 11:15 UTC - Mediator Beta (Peer Review)              │
+│ "Agree with assessment. Recommend proceeding with resolution."  │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 6. Resolution Tab
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Case: trade-042 │ Assign Resolution                               │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ Outcome Options:                                                   │
+│                                                                    │
+│ (o) Full Refund to Buyer                                         │
+│     Buyer: 500,000 USDC | Seller: 0 USDC                         │
+│                                                                    │
+│ ( ) Full Release to Seller                                       │
+│     Buyer: 0 USDC | Seller: 500,000 USDC                         │
+│                                                                    │
+│ (o) Loss Ratio Split (50/50)                                    │
+│     Buyer: 250,000 USDC | Seller: 250,000 USDC                   │
+│                                                                    │
+│ ( ) Custom Split:                                                │
+│     Buyer: [______] % | Seller: [______] %                       │
+│                                                                    │
+│ Justification:                                                     │
+│ ┌──────────────────────────────────────────────────────────────┐ │
+│ │ Evidence shows delivery damage occurred during transit.      │ │
+│ │ Loss ratio applies per trade terms. Recommend 50/50 split   │ │
+│ │ to fairly distribute transit risk between parties.          │ │
+│ └──────────────────────────────────────────────────────────────┘ │
+│                                                                    │
+│ Optional Fine/Penalty:                                            │
+│ Fine Amount: [__________] USDC                                   │
+│ Reason: [________________________________]                       │
+│                                                                    │
+│ [Preview Resolution] [Submit]                                    │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
 ## Backend Implementation Tasks
 
 ### Task 1: Mediator Routes Enhancement
@@ -281,6 +485,19 @@ The Mediator Dashboard is a dedicated interface enabling mediators to efficientl
 - [ ] Submit button with loading state
 - [ ] Success/error toast notifications
 
+### Task 8: Resolved Cases View
+**File:** `frontend/src/app/mediator/resolved/page.tsx`
+
+**Acceptance Criteria:**
+- [ ] List view of all resolved cases
+- [ ] Filter by outcome type (refund, release, split)
+- [ ] Filter by date range
+- [ ] Sort by resolution date/amount
+- [ ] Summary statistics (total cases, resolution rate, avg time)
+- [ ] Export to CSV button
+- [ ] Click to view case detail (read-only)
+- [ ] Pagination
+
 ## API Endpoints Summary
 
 ```
@@ -294,6 +511,74 @@ GET    /disputes/:tradeId/notes         # List notes for dispute
 POST   /disputes/:tradeId/resolve       # Submit resolution outcome
 GET    /disputes/:tradeId/settlement    # Get settlement details
 ```
+
+## Data Model Updates
+
+### MediatorNote
+```typescript
+interface MediatorNote {
+  id: string;
+  tradeId: string;
+  mediatorAddress: string;
+  content: string; // Markdown
+  createdAt: Date;
+  // Immutable - no updates
+}
+```
+
+### Dispute (Enhanced)
+```typescript
+interface Dispute {
+  tradeId: string;
+  initiator: string;
+  reason: string;
+  status: "PENDING" | "IN_REVIEW" | "RESOLVED";
+  createdAt: Date;
+  
+  // Resolution fields
+  resolvedBy?: string; // Mediator address
+  resolution?: "REFUND" | "RELEASE" | "SPLIT" | "CUSTOM";
+  justification?: string; // Markdown
+  resolvedAt?: Date;
+  
+  // Settlement fields
+  buyerSettlement?: Decimal;
+  sellerSettlement?: Decimal;
+  fineAmount?: Decimal;
+  
+  updatedAt: Date;
+}
+```
+
+## Security & Authorization
+
+### Access Control
+- Only users with `mediator` role can access mediator dashboard
+- Mediators can only view disputes assigned to them
+- Settlement execution requires additional authorization (admin/multisig)
+- All actions are audit logged with signatures
+
+### Data Privacy
+- Mediators see full audit trail (no masking)
+- Evidence metadata is visible (for case assessment)
+- Mediator notes are visible to all mediators (shared knowledge)
+- Settlement execution triggers event webhooks
+
+## Testing Strategy
+
+### Backend Tests
+- Unit tests for dispute service methods
+- Integration tests for API endpoints
+- Settlement calculation tests with various loss ratios
+- Authorization tests (mediator role enforcement)
+- Audit trail verification tests
+
+### Frontend Tests
+- Component rendering tests (Storybook)
+- Form submission and validation
+- Tab navigation and state management
+- Evidence gallery interactions
+- Responsive layout tests
 
 ## Success Metrics
 
