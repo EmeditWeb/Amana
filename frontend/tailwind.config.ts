@@ -10,22 +10,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // ── Surface / Elevation scale ──────────────────────────────────────
-        // surface-0  page canvas (deepest background)
-        // surface-1  card / panel (one step up)
-        // surface-2  elevated surface — active rows, modals, dropdowns
-        // surface-3  overlay / scrim
-        "surface-0": "#0B1A14",
-        "surface-1": "#122A1F",
-        "surface-2": "#1A3D2C",
-        "surface-3": "rgba(11,26,20,0.85)",
+        // ── Theme-aware surface / text / border tokens (CSS variables) ──
+        "surface-0": "var(--color-surface-0)",
+        "surface-1": "var(--color-surface-1)",
+        "surface-2": "var(--color-surface-2)",
+        "surface-3": "var(--color-surface-3)",
 
-        // Legacy bg-* aliases — kept for backward-compat, map to surface tokens
-        "bg-primary": "#0B1A14", // → surface-0
-        "bg-card": "#122A1F", // → surface-1
-        "bg-elevated": "#1A3D2C", // → surface-2
-        "bg-input": "#0F2219",
-        "bg-overlay": "rgba(11,26,20,0.85)", // → surface-3
+        "bg-primary": "var(--color-bg-primary)",
+        "bg-card": "var(--color-bg-card)",
+        "bg-elevated": "var(--color-bg-elevated)",
+        "bg-input": "var(--color-bg-input)",
+        "bg-overlay": "var(--color-bg-overlay)",
 
         gold: "#D4A853",
         "gold-hover": "#E0BA6A",
@@ -34,12 +29,12 @@ const config: Config = {
         "emerald-muted": "rgba(52,211,153,0.15)",
         "accent-emerald": "#34D399",
         teal: "#14B8A6",
-        "text-primary": "#F0F5F1",
-        "text-secondary": "#8BA89A",
-        "text-muted": "#5A7A6A",
-        "text-inverse": "#0B1A14",
 
-        // Status chip tokens
+        "text-primary": "var(--color-text-primary)",
+        "text-secondary": "var(--color-text-secondary)",
+        "text-muted": "var(--color-text-muted)",
+        "text-inverse": "var(--color-text-inverse)",
+
         "status-success": "#34D399",
         "status-warning": "#F59E0B",
         "status-danger": "#EF4444",
@@ -47,50 +42,42 @@ const config: Config = {
         "status-locked": "#D4A853",
         "status-draft": "#6B7280",
 
-        // ── Border tokens — elevation-aware ───────────────────────────────
-        "border-subtle": "rgba(139,168,154,0.12)", // surface-0 dividers
-        "border-default": "rgba(139,168,154,0.2)", // surface-1 card borders
-        "border-raised": "rgba(139,168,154,0.32)", // surface-2 elevated borders
-        "border-hover": "rgba(139,168,154,0.4)",
-        "border-focus": "rgba(212,168,83,0.6)",
+        "border-subtle": "var(--color-border-subtle)",
+        "border-default": "var(--color-border-default)",
+        "border-raised": "var(--color-border-raised)",
+        "border-hover": "var(--color-border-hover)",
+        "border-focus": "var(--color-border-focus)",
       },
       backgroundColor: {
-        // Surface scale
-        "surface-0": "#0B1A14",
-        "surface-1": "#122A1F",
-        "surface-2": "#1A3D2C",
-        "surface-3": "rgba(11,26,20,0.85)",
-        // Legacy aliases
-        primary: "#0B1A14",
-        card: "#122A1F",
-        elevated: "#1A3D2C",
-        input: "#0F2219",
-        overlay: "rgba(11,26,20,0.85)",
+        "surface-0": "var(--color-surface-0)",
+        "surface-1": "var(--color-surface-1)",
+        "surface-2": "var(--color-surface-2)",
+        "surface-3": "var(--color-surface-3)",
+        primary: "var(--color-bg-primary)",
+        card: "var(--color-bg-card)",
+        elevated: "var(--color-bg-elevated)",
+        input: "var(--color-bg-input)",
+        overlay: "var(--color-bg-overlay)",
       },
       textColor: {
-        primary: "#F0F5F1",
-        secondary: "#8BA89A",
-        muted: "#5A7A6A",
-        inverse: "#0B1A14",
+        primary: "var(--color-text-primary)",
+        secondary: "var(--color-text-secondary)",
+        muted: "var(--color-text-muted)",
+        inverse: "var(--color-text-inverse)",
       },
       borderColor: {
-        subtle: "rgba(139,168,154,0.12)",
-        default: "rgba(139,168,154,0.2)",
-        raised: "rgba(139,168,154,0.32)",
-        hover: "rgba(139,168,154,0.4)",
-        focus: "rgba(212,168,83,0.6)",
+        subtle: "var(--color-border-subtle)",
+        default: "var(--color-border-default)",
+        raised: "var(--color-border-raised)",
+        hover: "var(--color-border-hover)",
+        focus: "var(--color-border-focus)",
       },
       // ── Elevation / shadow scale ─────────────────────────────────────────
-      // elev-0  flat — surface-0 canvas, no lift
-      // elev-1  subtle lift — cards, panels, sidebar (surface-1)
-      // elev-2  raised — active rows, dropdowns, modals (surface-2)
-      // elev-3  overlay — dialogs, scrim (surface-3)
       boxShadow: {
         "elev-0": "none",
         "elev-1": "0 1px 4px rgba(0,0,0,0.25), 0 4px 24px rgba(0,0,0,0.3)",
         "elev-2": "0 4px 12px rgba(0,0,0,0.35), 0 8px 32px rgba(0,0,0,0.4)",
         "elev-3": "0 16px 48px rgba(0,0,0,0.5)",
-        // Legacy aliases
         card: "0 1px 4px rgba(0,0,0,0.25), 0 4px 24px rgba(0,0,0,0.3)",
         "card-hover": "0 4px 12px rgba(0,0,0,0.35), 0 8px 32px rgba(0,0,0,0.4)",
         "glow-gold": "0 0 20px rgba(212,168,83,0.2)",
@@ -138,8 +125,6 @@ const config: Config = {
           "monospace",
         ],
       },
-      // #444 — Figma type scale tokens: display → 3xl → 2xl → xl for headings;
-      // lg → base → sm for body and metadata. No ad-hoc sizes in components.
       fontSize: {
         xs: ["12px", { lineHeight: "1.5" }],
         sm: ["14px", { lineHeight: "1.5" }],

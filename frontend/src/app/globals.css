@@ -2,27 +2,73 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Light theme (default) */
+  --color-bg-primary: #F5F7F5;
+  --color-bg-card: #FFFFFF;
+  --color-bg-elevated: #F8FAF8;
+  --color-bg-input: #FFFFFF;
+  --color-bg-overlay: rgba(245,247,245,0.85);
+
+  --color-text-primary: #1A2E1A;
+  --color-text-secondary: #4A6B4A;
+  --color-text-muted: #6B8A6B;
+  --color-text-inverse: #F0F5F1;
+
+  --color-border-subtle: rgba(74,107,74,0.10);
+  --color-border-default: rgba(74,107,74,0.18);
+  --color-border-raised: rgba(74,107,74,0.28);
+  --color-border-hover: rgba(74,107,74,0.36);
+  --color-border-focus: rgba(180,140,60,0.6);
+
+  --color-surface-0: #F5F7F5;
+  --color-surface-1: #FFFFFF;
+  --color-surface-2: #F8FAF8;
+  --color-surface-3: rgba(245,247,245,0.85);
+
+  --color-scrollbar-track: #E8EDE8;
+  --color-scrollbar-thumb: rgba(74,107,74,0.2);
+  --color-scrollbar-thumb-hover: rgba(74,107,74,0.35);
+}
+
+.dark {
+  /* Dark theme overrides */
+  --color-bg-primary: #0B1A14;
+  --color-bg-card: #122A1F;
+  --color-bg-elevated: #1A3D2C;
+  --color-bg-input: #0F2219;
+  --color-bg-overlay: rgba(11,26,20,0.85);
+
+  --color-text-primary: #F0F5F1;
+  --color-text-secondary: #8BA89A;
+  --color-text-muted: #5A7A6A;
+  --color-text-inverse: #0B1A14;
+
+  --color-border-subtle: rgba(139,168,154,0.12);
+  --color-border-default: rgba(139,168,154,0.2);
+  --color-border-raised: rgba(139,168,154,0.32);
+  --color-border-hover: rgba(139,168,154,0.4);
+  --color-border-focus: rgba(212,168,83,0.6);
+
+  --color-surface-0: #0B1A14;
+  --color-surface-1: #122A1F;
+  --color-surface-2: #1A3D2C;
+  --color-surface-3: rgba(11,26,20,0.85);
+
+  --color-scrollbar-track: #0B1A14;
+  --color-scrollbar-thumb: rgba(139,168,154,0.2);
+  --color-scrollbar-thumb-hover: rgba(139,168,154,0.4);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--color-bg-primary);
+  --color-foreground: var(--color-text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   font-family:
     var(--font-geist-sans), Geist, ui-sans-serif, system-ui, sans-serif;
 }
@@ -45,19 +91,24 @@ body {
 }
 
 @layer base {
-  /* Scrollbar styling */
+  /* Scrollbar styling — theme-aware */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #0b1a14;
+    background: var(--color-scrollbar-track);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(139, 168, 154, 0.2);
+    background: var(--color-scrollbar-thumb);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(139, 168, 154, 0.4);
+    background: var(--color-scrollbar-thumb-hover);
+  }
+
+  /* Smooth theme transition */
+  *, *::before, *::after {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
   }
 }
