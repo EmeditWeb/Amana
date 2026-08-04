@@ -1,4 +1,5 @@
 type AnalyticsPayload = Record<string, unknown>;
+type AnalyticsPayload = Record<string, unknown>;
 
 type AnalyticsEvent = {
   eventName: string;
@@ -23,6 +24,28 @@ const SENSITIVE_KEYS = [
 const EMAIL_REGEX = /\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/;
 const IP_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/;
 const WALLET_REGEX = /\b0x[a-fA-F0-9]{40}\b|\b[46][a-zA-Z0-9]{48,56}\b/;
+
+// ─── Opt-out ──────────────────────────────────────────────────────────────────
+
+const OPT_OUT_KEY = "amana_analytics_opt_out";
+
+/** Returns true when the user has opted out of analytics. */
+export function isAnalyticsOptedOut(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(OPT_OUT_KEY) === "true";
+}
+
+/** Persist the user's analytics opt-out preference to localStorage. */
+export function setAnalyticsOptOut(optOut: boolean): void {
+  if (typeof window === "undefined") return;
+  if (optOut) {
+    localStorage.setItem(OPT_OUT_KEY, "true");
+  } else {
+    localStorage.removeItem(OPT_OUT_KEY);
+  }
+}
+
+// ─── PII scrubbing ─────────────────────────────────────────────────────────── 
 
 function scrubValue(value: unknown): unknown {
   if (typeof value === "string") {
@@ -102,6 +125,9 @@ function sendToCustomEndpoint(eventName: string, payload: AnalyticsPayload) {
 }
 
 function publishEvent(event: AnalyticsEvent): void {
+  // Respect user opt-out preference
+  if (isAnalyticsOptedOut()) return;
+
   const payload = event.payload ?? {};
   const provider = getAnalyticsProvider();
 
@@ -143,6 +169,49 @@ export function trackApiFailure(endpoint: string, status: number, metadata: Anal
 
 export function trackAuthEvent(step: string, status: "started" | "success" | "failed", metadata: AnalyticsPayload = {}): void {
   trackEvent("auth_event", { step, status, ...scrubProperties(metadata) });
+}
+
+// ─── Trade lifecycle instrumentation ─────────────────────────────────────────
+
+/**
+ * Track a page view. The path should never contain PII — only route segments
+ * like "/trades/[id]" (with the real ID stripped) are safe to send.
+ */
+export function trackPageView(page: string): void {
+  trackEvent("page_view", { page });
+}
+
+/**
+ * Track a step in the trade creation funnel.
+ * step: "details" | "negotiation" | "review" | "submitted" | "confirmed"
+ */
+export function trackTradeCreationStep(
+  step: string,
+  metadata: AnalyticsPayload = {},
+): void {
+  trackFunnelStep(`trade_create:${step}`, metadata);
+}
+
+/**
+ * Track a trade lifecycle transition (status change).
+ * No addresses or amounts are included — only the status label.
+ */
+export function trackTradeStatusChange(
+  toStatus: string,
+  metadata: AnalyticsPayload = {},
+): void {
+  trackEvent("trade_status_change", { toStatus, ...metadata });
+}
+
+/**
+ * Track a dispute lifecycle event.
+ * action: "initiated" | "evidence_uploaded" | "resolved"
+ */
+export function trackDisputeEvent(
+  action: string,
+  metadata: AnalyticsPayload = {},
+): void {
+  trackEvent("dispute_event", { action, ...metadata });
 }
 /**
  * Privacy-Safe Analytics Utility
