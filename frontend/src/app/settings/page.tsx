@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocaleStore } from "@/stores/localeStore";
 import type { Locale } from "@/i18n";
+import { isAnalyticsOptedOut, setAnalyticsOptOut } from "@/lib/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,17 @@ export default function SettingsPage() {
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {},
   );
+  const [analyticsOptOut, setAnalyticsOptOutState] = useState(false);
+
+  // Hydrate opt-out state from localStorage after mount (SSR-safe)
+  useEffect(() => {
+    setAnalyticsOptOutState(isAnalyticsOptedOut());
+  }, []);
+
+  function handleAnalyticsOptOutChange(optOut: boolean) {
+    setAnalyticsOptOut(optOut);
+    setAnalyticsOptOutState(optOut);
+  }
 
   function setNotif<K extends keyof NotificationPrefs>(
     key: K,
@@ -559,6 +571,42 @@ export default function SettingsPage() {
                 {t("settings.preferences.saved")}
               </span>
             )}
+          </div>
+        </SectionCard>
+
+        {/* ── Privacy & Analytics ── */}
+        <SectionCard
+          title="Privacy & Analytics"
+          description="Control how Amana collects anonymous usage data to improve the platform."
+        >
+          <div className="space-y-4">
+            <Toggle
+              label="Usage analytics"
+              description="Allow Amana to collect anonymous, aggregated usage telemetry — no wallet addresses, names, or financial data are ever sent. See the privacy policy for full details."
+              checked={!analyticsOptOut}
+              onChange={(enabled) => handleAnalyticsOptOutChange(!enabled)}
+            />
+            <Divider />
+            <div className="rounded-xl border border-border-default bg-bg-elevated px-4 py-3 space-y-1.5">
+              <p className="text-xs font-semibold text-text-primary uppercase tracking-widest">
+                What we collect
+              </p>
+              <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
+                <li>Page views (route names only, no query params)</li>
+                <li>Trade funnel step completions (no amounts or addresses)</li>
+                <li>UI errors and failed API calls (endpoint + status code only)</li>
+                <li>Auth flow events (step name + success/failure)</li>
+              </ul>
+              <p className="text-xs font-semibold text-text-primary uppercase tracking-widest mt-3">
+                What we never collect
+              </p>
+              <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
+                <li>Wallet addresses or public keys</li>
+                <li>Trade amounts or financial data</li>
+                <li>Names, email addresses, or IP addresses</li>
+                <li>Any personally identifiable information (PII)</li>
+              </ul>
+            </div>
           </div>
         </SectionCard>
 

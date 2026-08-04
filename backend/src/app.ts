@@ -32,6 +32,7 @@ import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
+import { createFeeAccountingRouter } from "./routes/fees.routes";
 import userRoutes from "./routes/user.routes";
 import reputationRoutes from "./routes/reputation.routes";
 import { stellarFeesRoutes } from "./routes/stellar.fees";
@@ -222,6 +223,9 @@ export function createApp(
   if (deps?.prisma && deps?.eventIndexer) {
     app.use("/api/v1", createEventRouter(deps.prisma, deps.eventIndexer));
   }
+
+  // Platform fee accounting & reporting (admin-only)
+  app.use("/fees", createFeeAccountingRouter());
 
   // Error handler registered last — Express 5 natively preserves middleware
   // order so it catches errors from all routes and middleware registered above.
