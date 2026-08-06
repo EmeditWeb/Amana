@@ -3,6 +3,7 @@ import { mapHistoryToTimeline, mapHistoryToTransactionTimeline } from "../[id]/p
 describe("Asset page history mapping", () => {
   const sampleEvent = {
     eventType: "trade_funded",
+    actor: "system",
     timestamp: "2024-01-02T12:00:00.000Z",
     metadata: { amount: 1000 },
   } as const;

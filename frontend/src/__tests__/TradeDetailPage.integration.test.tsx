@@ -42,11 +42,13 @@ function mockAuth() {
 
 function mockWallet() {
   mockUseWallet.mockReturnValue({
-    balance: "1000",
-    asset: "cNGN",
-    loading: false,
+    publicKey: BUYER_ADDRESS,
+    network: "testnet",
+    balances: { XLM: "1000" },
+    isConnected: true,
+    isConnecting: false,
     error: null,
-    refetch: jest.fn(),
+    refreshBalances: jest.fn(),
   });
 }
 

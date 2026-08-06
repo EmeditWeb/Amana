@@ -1,5 +1,4 @@
 type AnalyticsPayload = Record<string, unknown>;
-type AnalyticsPayload = Record<string, unknown>;
 
 type AnalyticsEvent = {
   eventName: string;

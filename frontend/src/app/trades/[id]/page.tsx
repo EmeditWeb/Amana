@@ -92,7 +92,7 @@ export default function TradeDetailPage() {
   const { token, address, isAuthenticated } = useAuth();
   const { trade, isLoading, error, refetch, deposit, confirmDelivery, releaseFunds, raiseDispute } =
     useTradeDetail(tradeId);
-  const { balance, asset } = useWallet();
+  const { balances, network } = useWallet();
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -219,11 +219,11 @@ export default function TradeDetailPage() {
           </div>
 
           {/* Wallet balance */}
-          {isAuthenticated && balance !== null && (
+          {isAuthenticated && network !== null && (
             <div className="rounded-lg border border-border-default bg-bg-card p-4 flex items-center justify-between">
               <p className="text-xs uppercase tracking-wide text-text-muted">Wallet Balance</p>
               <p className="text-sm font-semibold text-text-primary">
-                {balance} {asset}
+                {balances.XLM ?? "0"} XLM
               </p>
             </div>
           )}

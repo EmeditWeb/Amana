@@ -17,7 +17,7 @@ jest.mock('@stellar/stellar-sdk', () => ({
 
 // Mutable mock object for useAuth
 const mockUseAuth = {
-    token: 'mock-token',
+    token: 'mock-token' as string | null,
     isAuthenticated: true,
     connectWallet: jest.fn(),
     authenticate: jest.fn(),

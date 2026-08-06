@@ -83,7 +83,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload} />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video content"], "evidence.mp4", {
@@ -140,7 +140,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video"], "test.mp4", { type: "video/mp4" });
@@ -185,7 +185,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video"], "test.mp4", { type: "video/mp4" });
@@ -217,7 +217,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" onUpload={onUpload} />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video"], "test.mp4", { type: "video/mp4" });
@@ -355,7 +355,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video"], "test.mp4", { type: "video/mp4" });
@@ -376,7 +376,7 @@ describe("Evidence Upload and Playback Journey", () => {
     it("should handle invalid file types", async () => {
       render(<VideoUploadCard tradeId="trade-1" />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         // The input only accepts video files, so invalid types should be rejected by browser
@@ -476,7 +476,7 @@ describe("Evidence Upload and Playback Journey", () => {
 
       render(<VideoUploadCard tradeId="trade-1" />);
 
-      const input = document.querySelector('input[type="file"]');
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
 
       if (input) {
         const file = new File(["video"], "test.mp4", { type: "video/mp4" });

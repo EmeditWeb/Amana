@@ -105,6 +105,22 @@ export async function request<T>(
   const authToken = token ?? (!skipAuth ? getStoredToken() : null);
   const isFormData =
     typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout =
+    timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs)
+      : undefined;
+  const abortRequest = () => controller.abort();
+
+  if (signal?.aborted) {
+    controller.abort();
+  } else {
+    signal?.addEventListener("abort", abortRequest, { once: true });
+  }
 
   try {
     const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
