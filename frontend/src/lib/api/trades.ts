@@ -1,4 +1,5 @@
 import { createQueryString, request } from "./client";
+import { getApiBaseUrl } from "./env";
 import type {
   CreateTradeRequest,
   CreateTradeResponse,
@@ -87,4 +88,23 @@ export const tradesApi = {
       token,
       body: JSON.stringify({ reason, category }),
     }),
+
+  exportCsv: async (
+    token: string,
+    params?: { status?: string; from?: string; to?: string },
+  ) => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/trades/export${createQueryString({
+        format: "csv",
+        status: params?.status,
+        from: params?.from,
+        to: params?.to,
+      })}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to export trades");
+    }
+    return response.blob();
+  },
 };

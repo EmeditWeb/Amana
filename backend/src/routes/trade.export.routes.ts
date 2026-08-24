@@ -10,29 +10,37 @@ import { AuthRequest } from "../services/auth.service";
 const exportQuerySchema = z.object({
   format: z.enum(["csv", "json"]).default("json"),
   status: z.nativeEnum(TradeStatus).optional(),
-  dateFrom: z.string().datetime().optional(),
-  dateTo: z.string().datetime().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(50),
 }).refine(
   (value: {
+    from?: string;
+    to?: string;
     dateFrom?: string;
     dateTo?: string;
-  }) => !value.dateFrom || !value.dateTo || new Date(value.dateFrom) <= new Date(value.dateTo),
-  { message: "dateFrom must be before or equal to dateTo", path: ["dateFrom"] },
+  }) => {
+    const from = value.from ?? value.dateFrom;
+    const to = value.to ?? value.dateTo;
+    return !from || !to || new Date(from) <= new Date(to);
+  },
+  { message: "from must be before or equal to to", path: ["from"] },
 );
 
 const csvFields = [
-  "tradeId",
-  "buyerAddress",
-  "sellerAddress",
-  "amountUsdc",
+  "trade_id",
+  "buyer",
+  "seller",
+  "amount",
+  "asset",
   "status",
-  "fundedAt",
-  "deliveredAt",
-  "completedAt",
-  "createdAt",
-  "updatedAt",
+  "created_at",
+  "completed_at",
+  "fee",
+  "dispute_flag",
 ];
 
 function caller(req: AuthRequest, res: Response): string | null {
@@ -45,6 +53,8 @@ function caller(req: AuthRequest, res: Response): string | null {
 }
 
 function buildWhere(walletAddress: string, query: z.infer<typeof exportQuerySchema>): Prisma.TradeWhereInput {
+  const from = query.from ?? query.dateFrom;
+  const to = query.to ?? query.dateTo;
   const where: Prisma.TradeWhereInput = {
     OR: [{ buyerAddress: walletAddress }, { sellerAddress: walletAddress }],
   };
@@ -53,10 +63,10 @@ function buildWhere(walletAddress: string, query: z.infer<typeof exportQuerySche
     where.status = query.status;
   }
 
-  if (query.dateFrom || query.dateTo) {
+  if (from || to) {
     where.createdAt = {
-      ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}),
-      ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}),
+      ...(from ? { gte: new Date(from) } : {}),
+      ...(to ? { lte: new Date(to) } : {}),
     };
   }
 
@@ -64,17 +74,18 @@ function buildWhere(walletAddress: string, query: z.infer<typeof exportQuerySche
 }
 
 function serializeTrade(trade: Record<string, unknown>) {
+  const dispute = trade.dispute as { id?: number } | null | undefined;
   return {
-    tradeId: trade.tradeId,
-    buyerAddress: trade.buyerAddress,
-    sellerAddress: trade.sellerAddress,
-    amountUsdc: trade.amountUsdc,
+    trade_id: trade.tradeId,
+    buyer: trade.buyerAddress,
+    seller: trade.sellerAddress,
+    amount: trade.amountUsdc,
+    asset: "USDC",
     status: trade.status,
-    fundedAt: trade.fundedAt,
-    deliveredAt: trade.deliveredAt,
-    completedAt: trade.completedAt,
-    createdAt: trade.createdAt,
-    updatedAt: trade.updatedAt,
+    created_at: trade.createdAt,
+    completed_at: trade.completedAt,
+    fee: "",
+    dispute_flag: Boolean(dispute) || trade.status === TradeStatus.DISPUTED,
   };
 }
 
@@ -96,13 +107,14 @@ export function createTradeExportRouter(prisma: PrismaClient = defaultPrisma) {
         if (query.format === "csv") {
           const trades = await prisma.trade.findMany({
             where,
+            include: { dispute: { select: { id: true } } },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           });
           const rows = trades.map((trade: unknown) => serializeTrade(trade as any));
           const parser = new Parser({ fields: csvFields });
           const csv = parser.parse(rows);
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
-          res.setHeader("Content-Disposition", "attachment; filename=\"trades-export.csv\"");
+          res.setHeader("Content-Disposition", `attachment; filename="trades-${new Date().toISOString().slice(0, 10)}.csv"`);
           res.status(200).send(`\ufeff${csv}`);
           return;
         }

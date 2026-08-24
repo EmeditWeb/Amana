@@ -46,6 +46,7 @@ import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-v
 import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { createEventRouter } from "./routes/events.routes";
+import { createTradeEventsRouter } from "./routes/trade.events.routes";
 import { PrismaClient } from "@prisma/client";
 import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
@@ -187,6 +188,7 @@ export function createApp(
     r.use("/trades", createEscrowScheduleRouter());
     r.use("/trades", createTradeRouter());
     r.use("/trades", createTradeNotesRouter());
+    r.use(createTradeEventsRouter());
     r.use("/trades/:id/manifest", createTradeManifestRouter());
     r.use("/trades/:id/manifest", createManifestRouter());
     r.use(createEvidenceRouter());

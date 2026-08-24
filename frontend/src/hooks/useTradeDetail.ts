@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type TradeResponse } from "@/lib/api";
 import { useAuth } from "./useAuth";
+import { useTradeStream } from "./useTradeStream";
 
 const POLL_INTERVAL_MS = 10_000;
 const POLLING_STATUSES = new Set(["FUNDED", "IN_TRANSIT"]);
@@ -50,19 +51,37 @@ export function useTradeDetail(tradeId: string): UseTradeDetailResult {
   }, [token, isAuthenticated, tradeId]);
 
   useEffect(() => {
-    void fetchTrade();
+    const timer = window.setTimeout(() => {
+      void fetchTrade();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [fetchTrade]);
+
+  const stream = useTradeStream({
+    token,
+    tradeIds: tradeId ? [tradeId] : [],
+    onTradeEvent: (event) => {
+      setTrade((current) =>
+        current && current.tradeId === event.trade_id
+          ? { ...current, status: event.status }
+          : current,
+      );
+    },
+    onFallbackPoll: () => {
+      void fetchTrade();
+    },
+  });
 
   useEffect(() => {
     const status = trade?.status?.toUpperCase();
-    if (!status || !POLLING_STATUSES.has(status)) return;
+    if (stream.connected || !status || !POLLING_STATUSES.has(status)) return;
 
     const interval = setInterval(() => {
       void fetchTrade();
     }, POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [trade?.status, fetchTrade]);
+  }, [trade?.status, fetchTrade, stream.connected]);
 
   const requireToken = useCallback(() => {
     if (!token) throw new Error("Not authenticated");

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAnalytics } from "@/components/AnalyticsProvider";
 import { useToast } from "@/hooks/useToast";
 import { api, ApiError, type TradeResponse } from "@/lib/api";
+import { useTradeStream } from "@/hooks/useTradeStream";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { NavButton } from "@/components/ui/Navigation";
@@ -61,6 +62,28 @@ function formatDate(dateString: string) {
 function formatAddress(address: string) {
   if (address.length <= 12) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function toExportStatus(status: TradeStatus): string | undefined {
+  const statusMap: Partial<Record<TradeStatus, string>> = {
+    active: "FUNDED",
+    pending: "PENDING_SIGNATURE",
+    completed: "COMPLETED",
+    disputed: "DISPUTED",
+  };
+
+  return statusMap[status];
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ---------------------------------------------------------------------------
@@ -162,47 +185,82 @@ export function TradesFilters({ initialStatus, initialPage }: TradesFiltersProps
   // Data fetching — driven entirely by URL-derived status + page.
   // ------------------------------------------------------------------
 
-  useEffect(() => {
+  const fetchTrades = useCallback(async () => {
     trackFunnelStep("trade_page_view", { filter: currentStatus, page: currentPage });
 
-    async function fetchTrades() {
-      if (!isAuthenticated || !token) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await api.trades.list(token, {
-          status: currentStatus === "all" ? undefined : currentStatus,
-          page:   currentPage,
-          limit:  PAGE_SIZE,
-        });
-
-        setTrades(response.items);
-        setTotalPages(response.pagination.totalPages);
-      } catch (err) {
-        let errorMessage = "Failed to load trades";
-        let status = 0;
-
-        if (err instanceof ApiError) {
-          errorMessage = err.message;
-          status = err.status ?? 0;
-        } else if (err instanceof Error) {
-          errorMessage = err.message;
-        }
-
-        trackApiFailure("/trades", status, { message: errorMessage, filter: currentStatus });
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
+    if (!isAuthenticated || !token) {
+      setLoading(false);
+      return;
     }
 
-    void fetchTrades();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.trades.list(token, {
+        status: currentStatus === "all" ? undefined : currentStatus,
+        page:   currentPage,
+        limit:  PAGE_SIZE,
+      });
+
+      setTrades(response.items);
+      setTotalPages(response.pagination.totalPages);
+    } catch (err) {
+      let errorMessage = "Failed to load trades";
+      let status = 0;
+
+      if (err instanceof ApiError) {
+        errorMessage = err.message;
+        status = err.status ?? 0;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
+
+      trackApiFailure("/trades", status, { message: errorMessage, filter: currentStatus });
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   }, [token, isAuthenticated, currentStatus, currentPage, trackApiFailure, trackFunnelStep]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchTrades();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchTrades]);
+
+  useTradeStream({
+    token,
+    tradeIds: trades.map((trade) => trade.tradeId),
+    onTradeEvent: (event) => {
+      setTrades((current) =>
+        current.map((trade) =>
+          trade.tradeId === event.trade_id ? { ...trade, status: event.status } : trade,
+        ),
+      );
+    },
+    onFallbackPoll: () => {
+      void fetchTrades();
+    },
+  });
+
+  async function handleExport() {
+    if (!token) return;
+
+    try {
+      const blob = await api.trades.exportCsv(token, {
+        status: toExportStatus(currentStatus),
+      });
+      downloadBlob(blob, `trades-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (err) {
+      addToast({
+        type: "error",
+        title: "Export failed",
+        message: err instanceof Error ? err.message : "Failed to export trades.",
+      });
+    }
+  }
 
   // ------------------------------------------------------------------
   // Render
@@ -242,6 +300,14 @@ export function TradesFilters({ initialStatus, initialPage }: TradesFiltersProps
             Info
           </button>
         </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleExport}
+          disabled={!token || loading}
+        >
+          Export CSV
+        </Button>
         <Link href="/trades/create">
           <Button variant="primary">Create Trade</Button>
         </Link>

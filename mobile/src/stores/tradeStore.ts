@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { tradeApi } from '../api/trade';
 import type { Trade, TradeListResult, TradeStatus } from '../types/trade';
+import { authorizeSensitiveAction } from '../services/biometric.service';
 
 interface TradeState {
   trades: Trade[];
@@ -56,6 +57,11 @@ export const useTradeStore = create<TradeState>((set, get) => ({
   createTrade: async (data) => {
     set({ isLoading: true, error: null });
     try {
+      const authorized = await authorizeSensitiveAction('Authorize new trade');
+      if (!authorized) {
+        set({ error: 'Authentication cancelled', isLoading: false });
+        return null;
+      }
       const result = await tradeApi.createTrade(data);
       set({ isLoading: false });
       return result;
@@ -78,6 +84,11 @@ export const useTradeStore = create<TradeState>((set, get) => ({
   releaseFunds: async (tradeId) => {
     set({ isLoading: true, error: null });
     try {
+      const authorized = await authorizeSensitiveAction('Authorize fund release');
+      if (!authorized) {
+        set({ error: 'Authentication cancelled', isLoading: false });
+        return;
+      }
       await tradeApi.releaseFunds(tradeId);
       if (get().currentTrade) {
         await get().fetchTrade(tradeId);
@@ -104,6 +115,11 @@ export const useTradeStore = create<TradeState>((set, get) => ({
   initiateDispute: async (tradeId, reason) => {
     set({ isLoading: true, error: null });
     try {
+      const authorized = await authorizeSensitiveAction('Authorize dispute');
+      if (!authorized) {
+        set({ error: 'Authentication cancelled', isLoading: false });
+        return;
+      }
       const trade = await tradeApi.initiateDispute(tradeId, reason);
       set({ currentTrade: trade, isLoading: false });
     } catch (e: unknown) {
