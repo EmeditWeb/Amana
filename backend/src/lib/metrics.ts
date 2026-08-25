@@ -28,6 +28,7 @@ export interface StellarMetricsRecorder {
     outcome: StellarRpcOutcome,
     durationMs: number,
   ): void;
+  recordDuplicateEventAttempt?(source: string, eventType: string): void;
 }
 
 export interface PoolMetrics {
@@ -44,6 +45,7 @@ let pgPoolActiveConnections: Gauge | undefined;
 let pgPoolIdleConnections: Gauge | undefined;
 let pgPoolWaitingQueries: Gauge | undefined;
 let pgPoolTimeoutTotal: Counter | undefined;
+let duplicateEventAttempts: Counter | undefined;
 let customRecorder: StellarMetricsRecorder | null = null;
 
 function getMeter() {
@@ -137,6 +139,19 @@ function getPgPoolTimeoutTotal(): Counter {
   return pgPoolTimeoutTotal;
 }
 
+function getDuplicateEventAttempts(): Counter {
+  if (!duplicateEventAttempts) {
+    duplicateEventAttempts = getMeter().createCounter(
+      "event_duplicate_attempts_total",
+      {
+        description: "Total duplicate on-chain event ingestion attempts",
+        unit: "1",
+      },
+    );
+  }
+  return duplicateEventAttempts;
+}
+
 export function recordTransactionSubmission(
   operation: string,
   outcome: StellarTransactionOutcome,
@@ -173,6 +188,15 @@ export function recordPoolMetrics(metrics: PoolMetrics): void {
 
 export function recordPoolTimeout(): void {
   getPgPoolTimeoutTotal().add(1);
+}
+
+export function recordDuplicateEventAttempt(source: string, eventType: string): void {
+  if (customRecorder?.recordDuplicateEventAttempt) {
+    customRecorder.recordDuplicateEventAttempt(source, eventType);
+    return;
+  }
+
+  getDuplicateEventAttempts().add(1, { source, event_type: eventType });
 }
 
 export function classifySubmissionError(error: unknown): StellarTransactionOutcome {
@@ -224,4 +248,5 @@ export function __resetMetricsForTests(): void {
   pgPoolIdleConnections = undefined;
   pgPoolWaitingQueries = undefined;
   pgPoolTimeoutTotal = undefined;
+  duplicateEventAttempts = undefined;
 }

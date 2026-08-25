@@ -14,6 +14,7 @@ import type { RootStackParamList } from '../types/navigation';
 import type { Trade, TradeStatus } from '../types/trade';
 import { useTradeStore } from '../stores/tradeStore';
 import { useAuthStore } from '../stores/authStore';
+import { offlineQueue, QueuedAction } from '../services/offline-queue';
 
 type Props = StackScreenProps<RootStackParamList, 'TradeList'>;
 
@@ -63,6 +64,7 @@ export default function TradeListScreen({ navigation }: Props) {
   const { clearAuth } = useAuthStore();
   const [activeFilter, setActiveFilter] = useState<TradeStatus | 'ALL'>('ALL');
   const [refreshing, setRefreshing] = useState(false);
+  const [queued, setQueued] = useState<QueuedAction[]>([]);
 
   const load = useCallback(
     (status?: TradeStatus | 'ALL') => {
@@ -75,6 +77,8 @@ export default function TradeListScreen({ navigation }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => offlineQueue.subscribe(setQueued), []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -101,6 +105,11 @@ export default function TradeListScreen({ navigation }: Props) {
           <TouchableOpacity onPress={() => navigation.navigate('CreateTrade')}>
             <Text style={styles.createBtnText}>+ New</Text>
           </TouchableOpacity>
+          {queued.length > 0 && (
+            <TouchableOpacity style={styles.syncBadge} onPress={() => navigation.navigate('SyncQueue')}>
+              <Text style={styles.syncBadgeText}>Pending {queued.length}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => navigation.navigate('SecuritySettings')}>
             <Text style={styles.securityText}>Security</Text>
           </TouchableOpacity>
@@ -181,6 +190,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#1a3a1a' },
   headerActions: { flexDirection: 'row', gap: 16, alignItems: 'center' },
   createBtnText: { fontSize: 14, color: '#2d6a2d', fontWeight: '700' },
+  syncBadge: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  syncBadgeText: { color: '#92400E', fontSize: 12, fontWeight: '700' },
   securityText: { fontSize: 14, color: '#2d6a2d', fontWeight: '500' },
   logoutText: { fontSize: 14, color: '#2d6a2d', fontWeight: '500' },
   filterRow: {

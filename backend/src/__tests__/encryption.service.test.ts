@@ -1,4 +1,5 @@
 import { EncryptionService } from "../services/encryption.service";
+import { AppError } from "../errors/errorCodes";
 
 describe("EncryptionService", () => {
   const service = new EncryptionService("test-master-secret-value-with-minimum-length-32");
@@ -26,5 +27,9 @@ describe("EncryptionService", () => {
 
     expect(rotated).toContain("v2:");
     expect(service.decrypt(rotated, "trade-456")).toEqual("Need rotation");
+  });
+
+  it("throws when constructed without a master secret", () => {
+    expect(() => new EncryptionService("")).toThrow(AppError);
   });
 });

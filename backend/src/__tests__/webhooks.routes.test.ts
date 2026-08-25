@@ -2,6 +2,7 @@ process.env.JWT_SECRET = "a".repeat(32);
 process.env.JWT_ISSUER = "amana";
 process.env.JWT_AUDIENCE = "amana-api";
 process.env.DATABASE_URL = "postgres://dummy";
+process.env.STELLAR_NETWORK = "testnet";
 
 import request from "supertest";
 import { Keypair } from "@stellar/stellar-sdk";
@@ -9,8 +10,27 @@ import { createApp } from "../app";
 import { AuthService } from "../services/auth.service";
 import { prisma } from "../lib/db";
 
-jest.mock("../lib/db");
+jest.mock("../lib/db", () => ({
+  prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
+    webhookSubscription: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      delete: jest.fn(),
+    },
+  },
+}));
 jest.mock("../services/auth.service");
+jest.mock("../jobs/queue", () => ({
+  notificationQueue: { add: jest.fn() },
+  evidenceVerificationQueue: { add: jest.fn() },
+  exportQueue: { add: jest.fn() },
+  webhookQueue: { add: jest.fn() },
+  trustScoreQueue: { add: jest.fn() },
+}));
 
 describe("Webhooks Routes", () => {
   let app: any;
@@ -59,14 +79,20 @@ describe("Webhooks Routes", () => {
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("id");
-      expect(response.body).toHaveProperty("secret");
+      expect(response.body).not.toHaveProperty("secret");
+      expect(response.headers["x-webhook-secret"]).toBeDefined();
+      expect(response.headers["x-webhook-secret-warning"]).toBe("shown-only-once");
+      expect(response.body.warning).toContain("shown only once");
       expect(response.body.url).toBe("https://example.com/webhook");
       expect(response.body.events).toEqual(["trade.created", "trade.completed"]);
       expect(prisma.webhookSubscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: "https://example.com/webhook",
-          events: ["trade.created", "trade.completed"],
-          userId: mockUserId,
+          data: expect.objectContaining({
+            url: "https://example.com/webhook",
+            events: ["trade.created", "trade.completed"],
+            userId: mockUserId,
+            secretHash: expect.any(String),
+          }),
         })
       );
     });
@@ -104,7 +130,8 @@ describe("Webhooks Routes", () => {
         });
 
       expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty("secret");
+      expect(response.body).not.toHaveProperty("secret");
+      expect(response.headers["x-webhook-secret"]).toBe("custom-secret");
       expect(prisma.webhookSubscription.create).toHaveBeenCalled();
     });
 

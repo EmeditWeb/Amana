@@ -6,6 +6,7 @@ import net from 'net';
 import { prisma } from '../lib/db';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validateRequest';
+import { appLogger } from '../middleware/logger';
 
 const router = Router();
 
@@ -139,12 +140,26 @@ router.post(
         },
       });
 
-      // Return the webhook with the unhashed secret (only on creation)
+      appLogger.info(
+        {
+          userId,
+          webhookId: webhook.id,
+          events,
+          providedSecret: Boolean(secret),
+        },
+        "Webhook secret generated",
+      );
+
+      res.setHeader("X-Webhook-Secret", webhookSecret);
+      res.setHeader("X-Webhook-Secret-Warning", "shown-only-once");
+
       res.status(201).json({
         id: webhook.id,
         url: webhook.url,
         events: webhook.events,
-        secret: webhookSecret, // Return unhashed secret for user to save
+        secretShown: true,
+        secretDelivery: "response_header",
+        warning: "Webhook secret is shown only once in the X-Webhook-Secret response header.",
         isActive: webhook.isActive,
         createdAt: webhook.createdAt,
       });

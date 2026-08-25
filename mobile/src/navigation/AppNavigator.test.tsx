@@ -1,4 +1,3 @@
-import React from 'react';
 import { render } from '@testing-library/react-native';
 import { AppNavigator } from './AppNavigator';
 import * as useDeepLinkHook from '../hooks/useDeepLink';
@@ -12,7 +11,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('@react-navigation/stack', () => ({
   createStackNavigator: () => ({
-    Navigator: ({ children, initialRouteName, screenOptions }: any) => children,
+    Navigator: ({ children, initialRouteName: _initialRouteName, screenOptions: _screenOptions }: any) => children,
     Screen: ({ name, component: Component }: any) => <Component name={name} />,
   }),
 }));
@@ -23,6 +22,7 @@ jest.mock('../screens/TradeListScreen', () => 'TradeListScreen');
 jest.mock('../screens/TradeDetailScreen', () => 'TradeDetailScreen');
 jest.mock('../screens/DisputeDetailScreen', () => 'DisputeDetailScreen');
 jest.mock('../screens/CreateTradeScreen', () => 'CreateTradeScreen');
+jest.mock('../screens/SyncQueueScreen', () => 'SyncQueueScreen');
 jest.mock('../screens/EvidenceCaptureScreen', () => 'EvidenceCaptureScreen');
 
 // Mock useDeepLink

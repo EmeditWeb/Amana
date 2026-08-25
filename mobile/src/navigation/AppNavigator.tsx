@@ -13,6 +13,7 @@ const TradeListScreen = lazy(() => import('../screens/TradeListScreen'));
 const TradeDetailScreen = lazy(() => import('../screens/TradeDetailScreen'));
 const DisputeDetailScreen = lazy(() => import('../screens/DisputeDetailScreen'));
 const CreateTradeScreen = lazy(() => import('../screens/CreateTradeScreen'));
+const SyncQueueScreen = lazy(() => import('../screens/SyncQueueScreen'));
 const EvidenceCaptureScreen = lazy(() => import('../screens/EvidenceCaptureScreen'));
 const VaultDashboard = lazy(() => import('../screens/VaultDashboard'));
 const SecuritySettingsScreen = lazy(() => import('../screens/SecuritySettingsScreen'));
@@ -78,6 +79,7 @@ export function AppNavigator({ isAuthenticated }: AppNavigatorProps) {
           <Stack.Screen name="TradeDetail" component={TradeDetailScreen} />
           <Stack.Screen name="DisputeDetail" component={DisputeDetailScreen} />
           <Stack.Screen name="CreateTrade" component={CreateTradeScreen} />
+          <Stack.Screen name="SyncQueue" component={SyncQueueScreen} />
           <Stack.Screen name="EvidenceCapture" component={EvidenceCaptureScreen} />
           <Stack.Screen name="VaultDashboard" component={VaultDashboard} />
           <Stack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />

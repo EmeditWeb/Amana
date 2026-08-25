@@ -4,6 +4,7 @@ import { getEventListenerConfig, EventListenerConfig } from "../config/eventList
 import { ParsedEvent, EVENT_TOPIC_MAP } from "../types/events";
 import { appLogger } from "../middleware/logger";
 import { EventEmitter } from "events";
+import { recordDuplicateEventAttempt } from "../lib/metrics";
 
 export const eventIndexerEmitter = new EventEmitter();
 eventIndexerEmitter.setMaxListeners(100);
@@ -129,25 +130,32 @@ export class EventIndexerService {
     const parsed = this.parseEvent(rawEvent);
     if (!parsed) return;
 
-    const existing = await this.prisma.indexedEvent.findUnique({
-      where: { eventId: parsed.eventId },
-      select: { id: true },
-    });
-    if (existing) return;
-
     const txHash = rawEvent.txHash || null;
 
-    const record = await this.prisma.indexedEvent.create({
-      data: {
-        eventId: parsed.eventId,
-        tradeId: parsed.tradeId === "unknown" ? null : parsed.tradeId,
-        eventType: parsed.eventType,
-        ledgerSequence: parsed.ledgerSequence,
-        contractId: parsed.contractId,
-        txHash,
-        payload: parsed.data as Prisma.JsonObject,
-      },
-    });
+    let record: IndexedEventRecord;
+    try {
+      record = await this.prisma.indexedEvent.create({
+        data: {
+          eventId: parsed.eventId,
+          tradeId: parsed.tradeId === "unknown" ? null : parsed.tradeId,
+          eventType: parsed.eventType,
+          ledgerSequence: parsed.ledgerSequence,
+          contractId: parsed.contractId,
+          txHash,
+          payload: parsed.data as Prisma.JsonObject,
+        },
+      }) as IndexedEventRecord;
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        recordDuplicateEventAttempt("event-indexer", parsed.eventType);
+        appLogger.debug(
+          { eventId: parsed.eventId, eventType: parsed.eventType },
+          "[EventIndexer] Duplicate event ignored",
+        );
+        return;
+      }
+      throw error;
+    }
 
     if (parsed.ledgerSequence > this.lastIngestedLedger) {
       this.lastIngestedLedger = parsed.ledgerSequence;
@@ -186,25 +194,8 @@ export class EventIndexerService {
           const parsed = this.parseEvent(rawEvent);
           if (!parsed) continue;
 
-          const existing = await this.prisma.indexedEvent.findUnique({
-            where: { eventId: parsed.eventId },
-            select: { id: true },
-          });
-          if (existing) continue;
-
-          await this.prisma.indexedEvent.create({
-            data: {
-              eventId: parsed.eventId,
-              tradeId: parsed.tradeId === "unknown" ? null : parsed.tradeId,
-              eventType: parsed.eventType,
-              ledgerSequence: parsed.ledgerSequence,
-              contractId: parsed.contractId,
-              txHash: rawEvent.txHash || null,
-              payload: parsed.data as Prisma.JsonObject,
-            },
-          });
-
-          ingested += 1;
+          const inserted = await this.persistIndexedEvent(parsed, rawEvent.txHash || null);
+          if (inserted) ingested += 1;
           cursor = Math.max(cursor, parsed.ledgerSequence);
         }
 
@@ -265,6 +256,36 @@ export class EventIndexerService {
 
   getLastIngestedLedger(): number {
     return this.lastIngestedLedger;
+  }
+
+  private async persistIndexedEvent(parsed: ParsedEvent, txHash: string | null): Promise<boolean> {
+    try {
+      await this.prisma.indexedEvent.create({
+        data: {
+          eventId: parsed.eventId,
+          tradeId: parsed.tradeId === "unknown" ? null : parsed.tradeId,
+          eventType: parsed.eventType,
+          ledgerSequence: parsed.ledgerSequence,
+          contractId: parsed.contractId,
+          txHash,
+          payload: parsed.data as Prisma.JsonObject,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        recordDuplicateEventAttempt("event-indexer", parsed.eventType);
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private isUniqueConstraintError(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === "P2002"
+    );
   }
 
   private parseEvent(rawEvent: StellarSdk.rpc.Api.EventResponse): ParsedEvent | null {
