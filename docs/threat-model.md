@@ -357,11 +357,84 @@ Created → Funded → Delivered → Completed
 - **Out of scope:** Stellar network-level attacks (validator collusion, ledger reorgs), Freighter wallet security, third-party IPFS gateway security.
 - **Not modelled:** Social engineering of end-users outside the system.
 
+This document's threat scope is a superset of the formal third-party penetration test scope defined in [pentest-scope.md](./pentest-scope.md). The pentest additionally covers the frontend web app (Next.js) and mobile app (Expo React Native), which are not individually threat-modelled here but inherit controls from §4 (auth, validation, audit logging).
+
 ---
 
-## 7. References
+## 7. Penetration Test Preparation & Validation
+
+### 7.1 Pre-Pentest Threat-to-Test Mapping
+
+Each threat below is explicitly called out as a focus area for the penetration testing firm. The firm is expected to attempt exploitation of every threat that is marked **implemented but unverified** or **not implemented yet**, and to attempt to prove the existing controls sufficient for the verified ones.
+
+| Threat ID | Pentest Focus Area | Existing Control Status | Expected Firm Action |
+|---|---|---|---|
+| **TH-E-01** Dispute spam griefing | Contract entry point `initiate_dispute` + backend API rate limit bypass | Partial — rate limiting exists on backend but no dispute bond | Attempt 50+ rapid dispute initiations from single account; confirm backend + contract both block. Document residual griefing risk if bond is not implemented. |
+| **TH-E-02** Loss-ratio front-running | `create_trade()` input validation + seller acceptance flow | Partial — ratios validated, but no pre-funding seller acceptance | Create trade with 0/10000 loss split on test account; confirm contract accepts and document gap. If seller acceptance implemented pre-pentest, verify it cannot be bypassed. |
+| **TH-E-03** Fee drain via treasury replacement | `update_treasury`, `update_fee_bps` admin functions | Implemented (auth enforced) — single-sig admin vulnerability | Attempt unauthenticated / non-admin call to admin functions. Also simulate admin-compromise scenarios: verify no path allows user → admin escalation to reach these endpoints. |
+| **TH-E-04** Zero-amount trade pollution | `create_trade()` amount lower bound + backend Zod schema | Not implemented (per §4 control) | Attempt `amount=0`, `amount=1`, dust amounts; verify both layers reject or document gap. |
+| **TH-R-01** XDR transaction replay | Backend XDR issuance + timeBounds + idempotency | Implemented (Stellar sequence + backend idempotency middleware per [ADR-004](./adr/ADR-004-idempotency-and-retry-strategy.md)) | Intercept a valid deposit XDR, re-submit 10x rapidly via backend; verify idempotency middleware deduplicates; verify sequence numbers prevent on-chain replay. |
+| **TH-R-02** JWT replay after wallet key rotation | JWT claim binding + Redis revocation | Not implemented (no revocation list in §4) | Forge / steal a JWT, call wallet key rotation, re-use JWT; verify account state mismatch or document auth bypass. |
+| **TH-R-03** Audit export signature replay | Trade-history signed payload binding | Not implemented (trade_id not in signed payload per §4) | Replay a valid signed audit export from trade A against endpoint for trade B; verify mismatch or document false-verification. |
+| **TH-P-01** Biased mediator resolution | `resolve_dispute()` mediator auth + outcome logs | Implemented (mediator must be registered) — no consensus / appeal | As a registered test mediator, resolve 10 disputes with extreme splits (0/10000); verify backend logs every resolution. Document lack of appeal window if not implemented. |
+| **TH-P-02** Admin privilege escalation | Admin → mediator registration → self-dealing | Partially mitigated (admin cannot *initiate* disputes on others' trades, but *can* register self as mediator) | Attempt to register an admin-owned wallet as mediator; then attempt dispute paths. Check if any path allows admin → initiate → resolve own chain without being buyer/seller. |
+| **TH-P-03** Seller self-cancellation social engineering | Cooling period + dual-signature cancel | Implemented (both signatures required) — no cooling-off period | As seller, social-engineering scenario (firm documents, doesn't execute social) → verify mutual cancel state transitions. Attempt to race cancel vs delivery confirm. |
+| **TH-P-04** Video proof squatting | `submit_video_proof()` caller restriction | Not implemented (§4 control missing) | As buyer, call video proof submit *before* seller; verify squatting succeeds (or new restriction blocks it if fixed pre-pentest). |
+| **TH-D-01** IPFS evidence substitution | Backend CID retrieval & pinning integration | Partial — CIDs content-addressed, but no auto-pinning (§4) | Submit CID X via evidence endpoint; attempt to unpin-repin at gateway; verify backend fetch shows original content or document cache risk. |
+| **TH-D-02** Manifest hash preimage attack | Dispute workflow — hash preimage revelation | Not implemented (§4) — mediator handbook step only | Submit hashes with no preimage; attempt dispute flow without reveal. Verify UI/mediator dashboard shows warning or document gap. |
+
+### 7.2 Pre-Pentest Missing Controls — Preparation Priority
+
+The following §4 "Not implemented" controls have the highest leverage if implemented *before* the pentest. Implementing them reduces the likelihood of the firm finding trivially-exploitable issues and lets the pentest focus on deeper logic bugs.
+
+| Pre-Pentest Prep Item | Existing Threat | Effort | Recommended Action |
+|---|---|---|---|
+| **(A) JWT revocation list in Redis** | TH-R-02 | Low | **Implement pre-pentest.** Quick win; aligns with P0 in §5. Prevents trivially-found session issues from dominating the report. |
+| **(B) Video proof restricted to seller only** | TH-P-04 | Low | **Implement pre-pentest.** Contract + backend change in `submit_video_proof`. 1-hour change; avoids a clear Medium finding. |
+| **(C) Minimum trade amount floor (e.g. 100 cNGN)** | TH-E-04 | Low | **Implement pre-pentest.** Low effort; prevents dust pollution findings. Backend Zod + contract assertion. |
+| **(D) Trade_id in audit-export signed payload** | TH-R-03 | Low | **Implement pre-pentest.** Backend-only change to `AuditTrailService.getCanonicalPayload()`. Trivial. |
+| **(E) Multisig admin** | TH-P-02 / TH-E-03 | High | **Document as known risk, schedule post-pentest.** Large change; don't rush before test. Firm will flag but we accept it as a known, in-progress gap. |
+| **(F) Dispute bond** | TH-E-01 | Medium | **Document as known risk, schedule post-pentest.** Contract + economic change; don't rush pre-pentest. |
+| **(G) IPFS auto-pinning** | TH-D-01 | Medium | **If infra available, do pre-pentest.** Pinata API integration; reduces false findings about evidence integrity. |
+| **(H) Mediator appeal window** | TH-P-01 | Medium | **Document as known risk, schedule post-pentest.** Large state-machine change; not worth rushing. |
+| **(I) Seller acceptance step** | TH-E-02 | Medium | **If time allows, implement pre-pentest.** Requires contract + backend + frontend changes; large scope, decide based on timeline. |
+| **(J) Mediator outcome audit log** | TH-P-01 | Low | **Implement pre-pentest.** Backend admin dashboard only; low effort. Prevents a "no audit trail for mediator decisions" finding. |
+
+### 7.3 Post-Pentest Threat Model Maintenance
+
+After the final report is delivered, update this threat model within 2 weeks as part of the remediation SLA process defined in [pentest-remediation-sla.md](./pentest-remediation-sla.md) §7. The update must include:
+
+1. **Per-threat pentest result annotation:** For each threat in §3, add a sentence:
+   - If exploited by firm: *"Confirmed in pentest, AMANA-PT-YYYY-NNN; remediated in PR #XXXX."*
+   - If firm tested but could not exploit: *"Validated in pentest YYYY-MM-DD; existing controls sufficient."*
+
+2. **New threats discovered:** Any firm finding that maps to a threat scenario not currently in §3 is added as a new `TH-` row in the appropriate sub-category (Economic / Replay / Privilege / Data Integrity) with:
+   - Cross-reference to finding ID `AMANA-PT-YYYY-NNN`
+   - Current control status (✅ if fix merged during remediation; ❌ if deferred)
+   - Priority placement in §5 Recommendations
+
+3. **§4 Controls Table Update:** Every new or hardened control implemented as part of pentest remediation is added (or marked Implemented) in the §4 summary table.
+
+4. **§7.4 Pentest Sign-off Block (filled post-engagement):**
+
+```
+### 7.4 Penetration Test Validation Record
+
+| Firm | Date | Scope Doc Version | Findings (C/H/M/L/I) | Retest Pass Rate | Mainnet Gate Pass | Report |
+|---|---|---|---|---|---|---|
+| _TBD_ | _TBD_ | v1.0 | _ / _ / _ / _ / _ | _%_ | ☐ Yes / ☐ No | [Internal link] |
+```
+
+---
+
+## 8. References
 
 - [Soroban Security Best Practices](https://developers.stellar.org/docs/smart-contracts)
 - [Amana Backend Reliability Layer](./backend.md)
 - [Amana Escrow Contract README](../contracts/amana_escrow/README.md)
 - OWASP Smart Contract Top 10
+- **Pentest documentation set:**
+  - [Penetration Test Scope Definition](./pentest-scope.md) (in-scope assets, credentials, reporting format)
+  - [Penetration Test Rules of Engagement](./pentest-rules-of-engagement.md) (legal authorization, methodology, stop conditions)
+  - [Penetration Test Remediation SLA & Triage](./pentest-remediation-sla.md) (SLA matrix, bug tracking template, mainnet gate)
+  - [Incident Response Runbook](./runbooks/incident-response.md) (P0–P3 severity, on-call escalation)
