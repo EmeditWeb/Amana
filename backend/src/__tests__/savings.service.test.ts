@@ -1,5 +1,4 @@
 import { SavingsService } from "../services/savings.service";
-import { PrismaClient } from "@prisma/client";
 
 describe("SavingsService", () => {
     let savingsService: SavingsService;
@@ -76,17 +75,23 @@ describe("SavingsService", () => {
             expect(result.walletAddress).toBe(walletAddress.toLowerCase());
             expect(result.totalGoals).toBe(1);
             expect(result.activeGoals).toBe(1);
-            expect(result.goals[0].percentageComplete).toBe(74);
-            expect(result.goals[0].isOnTrack).toBe(true);
+            expect(result.goals[0]!.percentageComplete).toBe(74);
+            expect(result.goals[0]!.isOnTrack).toBe(true);
             expect(result.overallProgressPercentage).toBe(74);
         });
 
-        it("should throw error if user not found", async () => {
+        it("should throw a 404 AppError if user not found", async () => {
             mockPrisma.user.findUnique.mockResolvedValue(null);
 
             await expect(
                 savingsService.getGoalsAnalytics("NONEXISTENT")
-            ).rejects.toThrow("User not found");
+            ).rejects.toMatchObject({
+                statusCode: 404,
+                code: "NOT_FOUND",
+            });
+            await expect(
+                savingsService.getGoalsAnalytics("NONEXISTENT")
+            ).rejects.toBeInstanceOf(Error);
         });
     });
 
@@ -116,12 +121,15 @@ describe("SavingsService", () => {
             expect(mockPrisma.vault.create).toHaveBeenCalled();
         });
 
-        it("should throw error if user not found", async () => {
+        it("should throw a 404 AppError if user not found", async () => {
             mockPrisma.user.findUnique.mockResolvedValue(null);
 
             await expect(
                 savingsService.createVault("NONEXISTENT", "vault-1")
-            ).rejects.toThrow("User not found");
+            ).rejects.toMatchObject({
+                statusCode: 404,
+                code: "NOT_FOUND",
+            });
         });
     });
 
@@ -168,6 +176,44 @@ describe("SavingsService", () => {
             expect(result.goalId).toBe(goalId);
             expect(result.targetAmountUsdc).toBe(targetAmount);
             expect(mockPrisma.goal.create).toHaveBeenCalled();
+        });
+
+        it("should throw a 404 AppError if user not found", async () => {
+            mockPrisma.user.findUnique.mockResolvedValue(null);
+
+            await expect(
+                savingsService.createGoal(
+                    "NONEXISTENT",
+                    "goal-1",
+                    "vault-1",
+                    "10000000000",
+                    new Date(),
+                )
+            ).rejects.toMatchObject({
+                statusCode: 404,
+                code: "NOT_FOUND",
+            });
+        });
+
+        it("should throw a 404 AppError if vault not found", async () => {
+            mockPrisma.user.findUnique.mockResolvedValue({
+                id: 1,
+                walletAddress: "guser123",
+            });
+            mockPrisma.vault.findUnique.mockResolvedValue(null);
+
+            await expect(
+                savingsService.createGoal(
+                    "GUSER123",
+                    "goal-1",
+                    "missing-vault",
+                    "10000000000",
+                    new Date(),
+                )
+            ).rejects.toMatchObject({
+                statusCode: 404,
+                code: "NOT_FOUND",
+            });
         });
     });
 

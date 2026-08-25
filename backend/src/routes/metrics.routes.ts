@@ -38,6 +38,9 @@ export function createMetricsRouter(): Router {
           "pg_pool_waiting_queries",
           "pg_pool_timeout_total",
         ],
+        websocket: [
+          "websocket_active_connections",
+        ],
       },
     });
   });

@@ -6,6 +6,7 @@ import { horizonServer } from "../config/stellar";
 import { getPinataClient } from "../config/ipfs";
 import { AlertService, alertService as defaultAlertService } from "./alert.service";
 import { getCircuitBreakerStates } from "../lib/circuitBreaker";
+import { EventStreamService } from "./event-stream";
 
 interface HealthIndicatorResult {
   status: "up" | "down";
@@ -34,6 +35,12 @@ interface HealthCheckResponse {
     ipfsGateway: string;
     missingEnvVars: string[];
     circuitBreakers: Array<{ name: string; state: string }>;
+    websocketConnections: {
+      total: number;
+      perUserLimit: number;
+      globalLimit: number;
+      maxPerUser: number;
+    };
   };
 }
 
@@ -407,6 +414,7 @@ export class HealthService {
         ipfsGateway: env.IPFS_GATEWAY_URL,
         missingEnvVars,
         circuitBreakers,
+        websocketConnections: EventStreamService.getConnectionStats(),
       },
     };
   }
