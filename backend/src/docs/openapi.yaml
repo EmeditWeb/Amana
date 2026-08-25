@@ -2951,7 +2951,7 @@ paths:
     post:
       tags: [Webhooks]
       summary: Register a webhook subscription
-      description: Registers a webhook URL and event list for the authenticated user.
+      description: Registers a webhook URL and event list for the authenticated user. The plaintext webhook secret is visible only once on creation in the X-Webhook-Secret response header and is never returned in the JSON body.
       security:
         - bearerAuth: []
       requestBody:
@@ -2974,7 +2974,17 @@ paths:
               required: [url, events]
       responses:
         "201":
-          description: Created webhook subscription and plaintext secret.
+          description: Created webhook subscription. The plaintext secret is returned only once in X-Webhook-Secret.
+          headers:
+            X-Webhook-Secret:
+              description: Plaintext webhook secret shown only once on creation.
+              schema:
+                type: string
+            X-Webhook-Secret-Warning:
+              description: Indicates the secret will not be shown again.
+              schema:
+                type: string
+                example: shown-only-once
           content:
             application/json:
               schema:

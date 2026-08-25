@@ -16,6 +16,7 @@ import type { RootStackParamList } from './types/navigation';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { NotificationData } from './services/notification.service';
 import { AuthenticationGate } from './components/AuthenticationGate';
+import { offlineQueue } from './services/offline-queue';
 
 export default function App() {
   const { getToken, token } = useAuthStore();
@@ -25,6 +26,17 @@ export default function App() {
   useEffect(() => {
     getToken().finally(() => setBootstrapped(true));
   }, [getToken]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cleanup: (() => void) | undefined;
+    offlineQueue.init()
+      .then(() => {
+        cleanup = offlineQueue.startNetworkListener();
+      })
+      .catch(() => undefined);
+    return () => cleanup?.();
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;

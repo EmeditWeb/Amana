@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { useTradeStore } from '../stores/tradeStore';
+import { offlineQueue } from '../services/offline-queue';
 
 type Props = StackScreenProps<RootStackParamList, 'CreateTrade'>;
 
@@ -253,11 +254,13 @@ function Step3Review({
   data,
   onBack,
   onSubmit,
+  onSaveDraft,
   submitting,
 }: {
   data: FormData;
   onBack: () => void;
   onSubmit: () => void;
+  onSaveDraft: () => void;
   submitting: boolean;
 }) {
   const qty = parseFloat(data.quantity);
@@ -286,6 +289,9 @@ function Step3Review({
       <View style={stepStyles.btnRow}>
         <TouchableOpacity style={stepStyles.btnSecondary} onPress={onBack} disabled={submitting}>
           <Text style={stepStyles.btnSecondaryText}>Back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={stepStyles.btnSecondary} onPress={onSaveDraft} disabled={submitting}>
+          <Text style={stepStyles.btnSecondaryText}>Save Draft</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[stepStyles.btn, stepStyles.btnSubmit, submitting && stepStyles.btnDisabled]}
@@ -323,31 +329,52 @@ export default function CreateTradeScreen({ navigation }: Props) {
     setData((prev) => ({ ...prev, ...partial }));
   }, []);
 
+  const buildPayload = () => {
+    const qty = parseFloat(data.quantity);
+    const price = parseFloat(data.pricePerUnit);
+    const amountCngn = !isNaN(qty) && !isNaN(price) ? String(qty * price) : '0';
+
+    return {
+      sellerAddress: data.sellerAddress,
+      amountUsdc: amountCngn,
+      buyerLossBps: data.buyerRatio * 100,
+      sellerLossBps: data.sellerRatio * 100,
+      commodity: data.commodity,
+      quantity: data.quantity,
+      unit: data.unit,
+    };
+  };
+
+  const saveDraft = async (message = 'Trade draft saved. It will sync automatically when you are online.') => {
+    await offlineQueue.enqueue('CREATE_TRADE', buildPayload());
+    Alert.alert('Draft Saved', message);
+    navigation.replace('TradeList');
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const qty = parseFloat(data.quantity);
-      const price = parseFloat(data.pricePerUnit);
-      const amountCngn = !isNaN(qty) && !isNaN(price) ? String(qty * price) : '0';
+      const payload = buildPayload();
+      const online = await offlineQueue.isOnline();
+      if (!online) {
+        await saveDraft('No connection detected. The trade is queued for background sync.');
+        return;
+      }
 
-      const result = await createTrade({
-        sellerAddress: data.sellerAddress,
-        amountUsdc: amountCngn,
-        buyerLossBps: data.buyerRatio * 100,
-        sellerLossBps: data.sellerRatio * 100,
-        commodity: data.commodity,
-        quantity: data.quantity,
-        unit: data.unit,
-      });
+      const result = await createTrade(payload);
 
       if (result) {
         Alert.alert('Trade Created', `Trade ${result.tradeId} has been created. Sign the transaction with your wallet to deposit funds.`);
         navigation.replace('TradeDetail', { tradeId: result.tradeId });
       } else {
-        Alert.alert('Error', 'Failed to create trade. Please try again.');
+        await saveDraft('The trade could not be submitted now, so it was saved for retry.');
       }
     } catch (err) {
-      Alert.alert('Error', (err as Error)?.message ?? 'Failed to create trade');
+      try {
+        await saveDraft('The trade could not be submitted now, so it was saved for retry.');
+      } catch {
+        Alert.alert('Error', (err as Error)?.message ?? 'Failed to create trade');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -376,7 +403,13 @@ export default function CreateTradeScreen({ navigation }: Props) {
           <Step2Negotiation data={data} update={update} onBack={() => setStep(0)} onNext={() => setStep(2)} />
         )}
         {step === 2 && (
-          <Step3Review data={data} onBack={() => setStep(1)} onSubmit={handleSubmit} submitting={submitting} />
+          <Step3Review
+            data={data}
+            onBack={() => setStep(1)}
+            onSubmit={handleSubmit}
+            onSaveDraft={() => saveDraft()}
+            submitting={submitting}
+          />
         )}
       </ScrollView>
     </View>

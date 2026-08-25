@@ -24,6 +24,7 @@ interface HealthCheckResponse {
     ipfs: HealthIndicatorResult;
     redis: HealthIndicatorResult;
     config: HealthIndicatorResult;
+    encryptionKey: HealthIndicatorResult;
   };
   details: {
     databaseLatency: number;
@@ -33,6 +34,7 @@ interface HealthCheckResponse {
     stellarNetwork: string;
     ipfsGateway: string;
     missingEnvVars: string[];
+    encryptionKeyConfigured: boolean;
     circuitBreakers: Array<{ name: string; state: string }>;
   };
 }
@@ -48,6 +50,17 @@ interface HealthDatabase {
 }
 interface HealthRedis {
   ping(): Promise<string>;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutHandle);
+  });
 }
 
 export class HealthService {
@@ -68,15 +81,11 @@ export class HealthService {
     const timeout = 200; // 200ms threshold
 
     try {
-      await Promise.race([
+      await withTimeout(
         this.prisma.$queryRaw`SELECT 1 as health_check`,
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Database query timeout")),
-            timeout,
-          ),
-        ),
-      ]);
+        timeout,
+        "Database query timeout",
+      );
 
       const responseTime = Date.now() - startTime;
 
@@ -164,12 +173,11 @@ export class HealthService {
     const timeout = 5000;
 
     try {
-      await Promise.race([
+      await withTimeout(
         horizonServer.loadAccount(env.AMANA_ESCROW_CONTRACT_ID),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Stellar RPC timeout")), timeout),
-        ),
-      ]);
+        timeout,
+        "Stellar RPC timeout",
+      );
 
       const responseTime = Date.now() - startTime;
       return {
@@ -197,13 +205,12 @@ export class HealthService {
 
     try {
       const pinata = getPinataClient();
-      await Promise.race([
+      await withTimeout(
         (pinata as { testAuthentication?: () => Promise<unknown> }).testAuthentication?.()
           ?? Promise.resolve(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("IPFS timeout")), timeout),
-        ),
-      ]);
+        timeout,
+        "IPFS timeout",
+      );
 
       const responseTime = Date.now() - startTime;
       return {
@@ -230,12 +237,11 @@ export class HealthService {
     const timeout = 3000;
 
     try {
-      await Promise.race([
+      await withTimeout(
         this.cacheClient.ping(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Redis timeout")), timeout),
-        ),
-      ]);
+        timeout,
+        "Redis timeout",
+      );
 
       const responseTime = Date.now() - startTime;
       return {
@@ -266,6 +272,7 @@ export class HealthService {
       "JWT_SECRET",
       "AMANA_ESCROW_CONTRACT_ID",
       "USDC_CONTRACT_ID",
+      "TRADE_NOTES_ENCRYPTION_KEY",
     ];
 
     for (const varName of criticalVars) {
@@ -288,6 +295,20 @@ export class HealthService {
       status: "up",
       message: "Configuration valid",
       responseTime,
+    };
+  }
+
+  private checkEncryptionKey(): HealthIndicatorResult {
+    const startTime = Date.now();
+    const value = process.env.TRADE_NOTES_ENCRYPTION_KEY ?? env.TRADE_NOTES_ENCRYPTION_KEY;
+    const configured = typeof value === "string" && value.trim().length >= 32;
+
+    return {
+      status: configured ? "up" : "down",
+      message: configured
+        ? "Trade notes encryption key configured"
+        : "TRADE_NOTES_ENCRYPTION_KEY is missing or invalid",
+      responseTime: Date.now() - startTime,
     };
   }
 
@@ -333,6 +354,7 @@ export class HealthService {
       ipfsCheck,
       redisCheck,
       configCheck,
+      encryptionKeyCheck,
     ] = await Promise.all([
       this.checkDatabase(),
       this.checkIndexer(),
@@ -340,6 +362,7 @@ export class HealthService {
       this.checkIPFS(),
       this.checkRedis(),
       this.checkConfig(),
+      Promise.resolve(this.checkEncryptionKey()),
     ]);
 
     await this.dispatchAlerts(databaseCheck, redisCheck);
@@ -351,6 +374,7 @@ export class HealthService {
       || indexerCheck.status === "down"
       || stellarCheck.status === "down"
       || configCheck.status === "down"
+      || encryptionKeyCheck.status === "down"
     ) {
       status = "unhealthy";
     } else if (
@@ -397,6 +421,7 @@ export class HealthService {
         ipfs: ipfsCheck,
         redis: redisCheck,
         config: configCheck,
+        encryptionKey: encryptionKeyCheck,
       },
       details: {
         databaseLatency: databaseCheck.responseTime,
@@ -406,6 +431,7 @@ export class HealthService {
         stellarNetwork: env.STELLAR_NETWORK,
         ipfsGateway: env.IPFS_GATEWAY_URL,
         missingEnvVars,
+        encryptionKeyConfigured: encryptionKeyCheck.status === "up",
         circuitBreakers,
       },
     };
@@ -422,19 +448,21 @@ export class HealthService {
   }> {
     const timestamp = new Date().toISOString();
 
-    const [databaseCheck, redisCheck, configCheck] = await Promise.all([
+    const [databaseCheck, redisCheck, configCheck, encryptionKeyCheck] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
       this.checkConfig(),
+      Promise.resolve(this.checkEncryptionKey()),
     ]);
 
     const checks = {
       database: databaseCheck,
       redis: redisCheck,
       config: configCheck,
+      encryptionKey: encryptionKeyCheck,
     };
 
-    const status = databaseCheck.status === "up" && redisCheck.status === "up" && configCheck.status === "up"
+    const status = databaseCheck.status === "up" && redisCheck.status === "up" && configCheck.status === "up" && encryptionKeyCheck.status === "up"
       ? "ready"
       : "not_ready";
 

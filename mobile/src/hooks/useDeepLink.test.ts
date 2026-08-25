@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react-native';
-import { useDeepLink } from './useDeepLink';
+import { DeepLinkTarget, useDeepLink } from './useDeepLink';
 import * as authStore from '../stores/authStore';
 
 // Mock the authStore
@@ -13,35 +13,35 @@ describe('useDeepLink', () => {
   });
 
   it('should parse trade deep link correctly', () => {
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: 'test-token',
     });
 
     const { result } = renderHook(() => useDeepLink());
 
     act(() => {
-      const deepLink = {
+      const deepLink: DeepLinkTarget = {
         screen: 'TradeDetail',
-        params: { id: 'trade-123' },
+        params: { tradeId: 'trade-123' },
       };
       result.current.handleDeepLink(deepLink);
     });
 
     expect(result.current.pendingDeepLink).toEqual({
       screen: 'TradeDetail',
-      params: { id: 'trade-123' },
+      params: { tradeId: 'trade-123' },
     });
   });
 
   it('should parse dispute deep link correctly', () => {
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: 'test-token',
     });
 
     const { result } = renderHook(() => useDeepLink());
 
     act(() => {
-      const deepLink = {
+      const deepLink: DeepLinkTarget = {
         screen: 'DisputeDetail',
         params: { id: 'dispute-456' },
       };
@@ -55,48 +55,48 @@ describe('useDeepLink', () => {
   });
 
   it('should store pending deep link when user is not authenticated', () => {
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: null,
     });
 
     const { result, rerender } = renderHook(() => useDeepLink());
 
     act(() => {
-      const deepLink = {
+      const deepLink: DeepLinkTarget = {
         screen: 'TradeDetail',
-        params: { id: 'trade-789' },
+        params: { tradeId: 'trade-789' },
       };
       result.current.handleDeepLink(deepLink);
     });
 
     expect(result.current.pendingDeepLink).toEqual({
       screen: 'TradeDetail',
-      params: { id: 'trade-789' },
+      params: { tradeId: 'trade-789' },
     });
 
     // Now authenticate
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: 'authenticated-token',
     });
 
-    rerender();
+    rerender(undefined);
 
     // The pending deep link should still be available
     expect(result.current.pendingDeepLink).toEqual({
       screen: 'TradeDetail',
-      params: { id: 'trade-789' },
+      params: { tradeId: 'trade-789' },
     });
   });
 
   it('should handle trade list deep link', () => {
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: 'test-token',
     });
 
     const { result } = renderHook(() => useDeepLink());
 
     act(() => {
-      const deepLink = {
+      const deepLink: DeepLinkTarget = {
         screen: 'TradeList',
       };
       result.current.handleDeepLink(deepLink);
@@ -108,14 +108,14 @@ describe('useDeepLink', () => {
   });
 
   it('should handle evidence capture deep link', () => {
-    (authStore.useAuthStore as jest.Mock).mockReturnValue({
+    (authStore.useAuthStore as unknown as jest.Mock).mockReturnValue({
       token: 'test-token',
     });
 
     const { result } = renderHook(() => useDeepLink());
 
     act(() => {
-      const deepLink = {
+      const deepLink: DeepLinkTarget = {
         screen: 'EvidenceCapture',
         params: { tradeId: 'trade-101' },
       };

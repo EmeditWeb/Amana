@@ -1,12 +1,21 @@
 import crypto from "crypto";
 import { env } from "../config/env";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const DEFAULT_KEY_VERSION = "v1";
 
 export class EncryptionService {
-  constructor(private readonly masterSecret: string = env.TRADE_NOTES_ENCRYPTION_KEY ?? "") {}
+  constructor(private readonly masterSecret: string = env.TRADE_NOTES_ENCRYPTION_KEY ?? "") {
+    if (!masterSecret.trim()) {
+      throw new AppError(
+        ErrorCode.INFRA_ERROR,
+        "TRADE_NOTES_ENCRYPTION_KEY is required for trade note encryption",
+        500,
+      );
+    }
+  }
 
   encrypt(plaintext: string, tradeId: string, keyVersion: string = DEFAULT_KEY_VERSION): string {
     const key = this.deriveKey(tradeId, keyVersion);

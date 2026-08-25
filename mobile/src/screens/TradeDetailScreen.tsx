@@ -103,7 +103,7 @@ function TradeTimeline({ trade }: { trade: Trade }) {
 }
 
 export default function TradeDetailScreen({ route, navigation }: Props) {
-  const { tradeId } = route.params;
+  const tradeId = route.params.tradeId;
   const insets = useSafeAreaInsets();
   const { currentTrade, isLoading, error, fetchTrade, confirmDelivery, initiateDispute, releaseFunds, deposit, clearError } =
     useTradeStore();
