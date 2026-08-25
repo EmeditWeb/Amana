@@ -16,6 +16,7 @@ import {
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
 import { logErrorWithContext, logBusinessEvent } from "../lib/logging";
+import { tradeStatusEvents } from "../services/tradeStatusEvents";
 
 const AMOUNT_USDC_PATTERN = /^\d+(?:\.\d{1,7})?$/;
 
@@ -116,6 +117,11 @@ export class TradeController {
         amountUsdc: normalizedAmountUsdc,
         buyerLossBps: buyerBps,
         sellerLossBps: sellerBps,
+      });
+      tradeStatusEvents.publish({
+        trade_id: tradeId,
+        status: TradeStatus.PENDING_SIGNATURE,
+        event_type: "trade_created",
       });
 
       logBusinessEvent(req, 'trade_created', { tradeId, buyerAddress, sellerAddress, amountUsdc: normalizedAmountUsdc });
@@ -218,6 +224,11 @@ export class TradeController {
       }
 
       const unsignedXdr = await buildConfirmDeliveryTx(trade, caller);
+      tradeStatusEvents.publish({
+        trade_id: trade.tradeId,
+        status: TradeStatus.DELIVERED,
+        event_type: "delivery_confirmed",
+      });
       res.status(200).json({ unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) {
@@ -272,6 +283,11 @@ export class TradeController {
       }
 
       const unsignedXdr = await buildReleaseFundsTx(trade, caller);
+      tradeStatusEvents.publish({
+        trade_id: trade.tradeId,
+        status: TradeStatus.COMPLETED,
+        event_type: "funds_released",
+      });
       res.status(200).json({ unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) {
@@ -330,6 +346,11 @@ export class TradeController {
         typeof category === "string" ? category : "",
         parsedCategoryId ?? undefined,
       );
+      tradeStatusEvents.publish({
+        trade_id: tradeId,
+        status: TradeStatus.DISPUTED,
+        event_type: "dispute_initiated",
+      });
 
       return res.status(200).json({ unsignedXdr });
     } catch (error) {

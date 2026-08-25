@@ -15,6 +15,7 @@ import {
 import type { RootStackParamList } from './types/navigation';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { NotificationData } from './services/notification.service';
+import { AuthenticationGate } from './components/AuthenticationGate';
 
 export default function App() {
   const { getToken, token } = useAuthStore();
@@ -67,7 +68,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AppNavigator isAuthenticated={!!token} />
+        <AuthenticationGate authenticated={!!token}>
+          <AppNavigator isAuthenticated={!!token} />
+        </AuthenticationGate>
         <StatusBar style="dark" />
       </SafeAreaProvider>
     </GestureHandlerRootView>

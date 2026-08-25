@@ -1,4 +1,5 @@
 import { createQueryString, request } from "./client";
+import { getApiBaseUrl } from "./env";
 import type {
   DisputeListResponse,
   DisputeResponse,
@@ -26,4 +27,18 @@ export const disputesApi = {
       token,
       body: JSON.stringify(data),
     }),
+
+  exportCsv: async (token: string, params?: { status?: string }) => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/disputes/export${createQueryString({
+        format: "csv",
+        status: params?.status,
+      })}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to export disputes");
+    }
+    return response.blob();
+  },
 };

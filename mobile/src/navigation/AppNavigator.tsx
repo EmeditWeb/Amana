@@ -15,6 +15,7 @@ const DisputeDetailScreen = lazy(() => import('../screens/DisputeDetailScreen'))
 const CreateTradeScreen = lazy(() => import('../screens/CreateTradeScreen'));
 const EvidenceCaptureScreen = lazy(() => import('../screens/EvidenceCaptureScreen'));
 const VaultDashboard = lazy(() => import('../screens/VaultDashboard'));
+const SecuritySettingsScreen = lazy(() => import('../screens/SecuritySettingsScreen'));
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -37,6 +38,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       CreateTrade: 'create-trade',
       EvidenceCapture: 'evidence/:tradeId',
       VaultDashboard: 'vault',
+      SecuritySettings: 'security',
       WalletConnect: 'connect',
     },
   },
@@ -78,6 +80,7 @@ export function AppNavigator({ isAuthenticated }: AppNavigatorProps) {
           <Stack.Screen name="CreateTrade" component={CreateTradeScreen} />
           <Stack.Screen name="EvidenceCapture" component={EvidenceCaptureScreen} />
           <Stack.Screen name="VaultDashboard" component={VaultDashboard} />
+          <Stack.Screen name="SecuritySettings" component={SecuritySettingsScreen} />
         </Stack.Navigator>
       </Suspense>
     </NavigationContainer>

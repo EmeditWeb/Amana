@@ -1,6 +1,7 @@
 const CACHE_NAME = "amana-cache-v1";
 const STATIC_ASSETS = [
   "/",
+  "/offline",
   "/manifest.json",
 ];
 
@@ -33,7 +34,16 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/trades/")) {
+  if (request.method !== "GET") {
+    return;
+  }
+
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirstNavigation(request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirstWithCache(request));
     return;
   }
@@ -50,7 +60,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(networkFirstWithCache(request));
 });
 
-async function cacheFirst(request: Request): Promise<Response> {
+async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
   try {
@@ -65,7 +75,21 @@ async function cacheFirst(request: Request): Promise<Response> {
   }
 }
 
-async function networkFirstWithCache(request: Request): Promise<Response> {
+async function networkFirstNavigation(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || caches.match("/offline");
+  }
+}
+
+async function networkFirstWithCache(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
