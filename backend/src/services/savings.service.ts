@@ -1,5 +1,6 @@
 import { PrismaClient, Goal, Vault } from "@prisma/client";
 import { prisma as defaultPrisma } from "../lib/db";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 interface GoalAnalytics {
     goalId: string;
@@ -52,7 +53,11 @@ export class SavingsService {
         });
 
         if (!user) {
-            throw new Error(`User not found: ${walletAddress}`);
+            throw new AppError(
+                ErrorCode.NOT_FOUND,
+                `User not found: ${walletAddress}`,
+                404,
+            );
         }
 
         // Fetch all goals (active and completed) for analytics
@@ -145,7 +150,11 @@ export class SavingsService {
         });
 
         if (!user) {
-            throw new Error(`User not found: ${walletAddress}`);
+            throw new AppError(
+                ErrorCode.NOT_FOUND,
+                `User not found: ${walletAddress}`,
+                404,
+            );
         }
 
         return this.prisma.vault.create({
@@ -174,7 +183,11 @@ export class SavingsService {
         });
 
         if (!user) {
-            throw new Error(`User not found: ${walletAddress}`);
+            throw new AppError(
+                ErrorCode.NOT_FOUND,
+                `User not found: ${walletAddress}`,
+                404,
+            );
         }
 
         const vault = await this.prisma.vault.findUnique({
@@ -182,7 +195,11 @@ export class SavingsService {
         });
 
         if (!vault) {
-            throw new Error(`Vault not found: ${vaultId}`);
+            throw new AppError(
+                ErrorCode.NOT_FOUND,
+                `Vault not found: ${vaultId}`,
+                404,
+            );
         }
 
         return this.prisma.goal.create({

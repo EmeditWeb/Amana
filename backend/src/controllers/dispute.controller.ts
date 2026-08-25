@@ -19,6 +19,19 @@ const transitionDisputeSchema = z.object({
   status: z.enum(["UNDER_REVIEW", "RESOLVED", "CLOSED"]),
 });
 
+const disputeIdParamSchema = z.object({
+  id: z
+    .string()
+    .min(1, "Dispute/trade ID is required")
+    .max(255, "Dispute/trade ID is too long")
+    .regex(
+      /^[A-Za-z0-9_-]+$/,
+      "Dispute/trade ID contains invalid characters",
+    ),
+});
+
+export { disputeIdParamSchema };
+
 const exportDisputesQuerySchema = z.object({
   format: z.enum(["csv"]).default("csv"),
   status: z.enum(["OPEN", "UNDER_REVIEW", "RESOLVED", "CLOSED"]).optional(),
@@ -185,7 +198,7 @@ export function createDisputeRouter(prisma = defaultPrisma) {
   router.post(
     "/:id/transition",
     authMiddleware,
-    validateRequest({ body: transitionDisputeSchema }),
+    validateRequest({ params: disputeIdParamSchema, body: transitionDisputeSchema }),
     disputeController.transitionDisputeStatus,
   );
 

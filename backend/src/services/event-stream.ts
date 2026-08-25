@@ -1,5 +1,6 @@
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { metrics } from "@opentelemetry/api";
 import { eventIndexerEmitter, IndexedEventRecord } from "./event-indexer";
 import { appLogger } from "../middleware/logger";
 
@@ -8,14 +9,49 @@ interface StreamFilter {
   eventType?: string;
 }
 
+interface ClientMeta {
+  filter: StreamFilter;
+  userId: string;
+  failedPongs: number;
+}
+
+// Connection limit configuration (see issue #1036)
+const MAX_CONNECTIONS_PER_USER = 5;
+const MAX_TOTAL_CONNECTIONS = 10_000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const MAX_MISSED_PONGS = 3;
+const WS_CLOSE_TRY_AGAIN_LATER = 1013;
+
 export class EventStreamService {
+  private static current: EventStreamService | null = null;
+
   private wss: WebSocketServer;
-  private clients: Map<WebSocket, StreamFilter> = new Map();
+  private clients: Map<WebSocket, ClientMeta> = new Map();
+  private userCounts: Map<string, number> = new Map();
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private connectionGauge: ReturnType<ReturnType<typeof metrics.getMeter>["createObservableGauge"]> | null = null;
+  private connectionGaugeCallback: ((result: { observe: (value: number) => void }) => void) | null = null;
 
   constructor(server: HttpServer) {
+    EventStreamService.current = this;
     this.wss = new WebSocketServer({ server, path: "/api/v1/ws/events" });
 
+    this.registerMetrics();
+
     this.wss.on("connection", (ws: WebSocket, req) => {
+      const reject = (code: number, reason: string) => {
+        try {
+          ws.close(code, reason);
+        } finally {
+          ws.terminate();
+        }
+      };
+
+      if (this.clients.size >= MAX_TOTAL_CONNECTIONS) {
+        appLogger.warn("[EventStream] Global connection limit reached; rejecting connection");
+        return reject(WS_CLOSE_TRY_AGAIN_LATER, "Server connection limit reached");
+      }
+
       const url = new URL(req.url ?? "", "http://localhost");
       const filter: StreamFilter = {};
       const tradeId = url.searchParams.get("trade_id");
@@ -23,18 +59,39 @@ export class EventStreamService {
       if (tradeId) filter.tradeId = tradeId;
       if (eventType) filter.eventType = eventType;
 
-      this.clients.set(ws, filter);
+      const userId =
+        url.searchParams.get("user") ??
+        req.socket.remoteAddress ??
+        "anonymous";
 
-      ws.on("close", () => {
-        this.clients.delete(ws);
+      const currentUserCount = this.userCounts.get(userId) ?? 0;
+      if (currentUserCount >= MAX_CONNECTIONS_PER_USER) {
+        appLogger.warn(
+          { userId },
+          "[EventStream] Per-user connection limit reached; rejecting connection",
+        );
+        return reject(WS_CLOSE_TRY_AGAIN_LATER, "Connection limit reached for user");
+      }
+
+      const meta: ClientMeta = { filter, userId, failedPongs: 0 };
+      this.clients.set(ws, meta);
+      this.userCounts.set(userId, currentUserCount + 1);
+
+      ws.on("pong", () => {
+        const m = this.clients.get(ws);
+        if (m) m.failedPongs = 0;
       });
 
-      ws.on("error", () => {
-        this.clients.delete(ws);
-      });
+      ws.on("close", () => this.removeClient(ws));
+      ws.on("error", () => this.removeClient(ws));
 
       ws.send(JSON.stringify({ type: "connected", message: "Event stream connected" }));
     });
+
+    this.heartbeatInterval = setInterval(() => this.heartbeat(), HEARTBEAT_INTERVAL_MS);
+    if (typeof this.heartbeatInterval.unref === "function") {
+      this.heartbeatInterval.unref();
+    }
 
     eventIndexerEmitter.on("event", (event: IndexedEventRecord) => {
       this.broadcast(event);
@@ -43,32 +100,132 @@ export class EventStreamService {
     appLogger.info("[EventStream] WebSocket server initialized on /api/v1/ws/events");
   }
 
-  private broadcast(event: IndexedEventRecord): void {
-    const message = JSON.stringify({ type: "event", data: event });
+  private registerMetrics(): void {
+    try {
+      const meter = metrics.getMeter("amana-backend");
+      this.connectionGauge = meter.createObservableGauge(
+        "websocket_active_connections",
+        {
+          description: "Number of active WebSocket connections to the event stream",
+          unit: "1",
+        },
+      );
+      this.connectionGaugeCallback = (result) => {
+        result.observe(this.clients.size);
+      };
+      this.connectionGauge.addCallback(this.connectionGaugeCallback);
+    } catch (error) {
+      appLogger.warn({ error }, "[EventStream] Failed to register connection metric");
+    }
+  }
 
-    for (const [ws, filter] of this.clients.entries()) {
+  private heartbeat(): void {
+    for (const [ws, meta] of this.clients.entries()) {
       if (ws.readyState !== WebSocket.OPEN) {
-        this.clients.delete(ws);
+        this.removeClient(ws);
         continue;
       }
 
-      if (filter.tradeId && event.tradeId !== filter.tradeId) continue;
-      if (filter.eventType && event.eventType !== filter.eventType) continue;
+      meta.failedPongs += 1;
+      if (meta.failedPongs > MAX_MISSED_PONGS) {
+        appLogger.info(
+          { userId: meta.userId },
+          "[EventStream] Terminating stale connection after missed pongs",
+        );
+        this.removeClient(ws);
+        try {
+          ws.terminate();
+        } catch {
+          /* no-op */
+        }
+        continue;
+      }
 
       try {
-        ws.send(message);
+        ws.ping();
       } catch {
-        this.clients.delete(ws);
+        this.removeClient(ws);
       }
     }
   }
 
+  private removeClient(ws: WebSocket): void {
+    const meta = this.clients.get(ws);
+    if (!meta) return;
+    this.clients.delete(ws);
+    const remaining = (this.userCounts.get(meta.userId) ?? 1) - 1;
+    if (remaining <= 0) {
+      this.userCounts.delete(meta.userId);
+    } else {
+      this.userCounts.set(meta.userId, remaining);
+    }
+  }
+
+  private broadcast(event: IndexedEventRecord): void {
+    const message = JSON.stringify({ type: "event", data: event });
+
+    for (const [ws, meta] of this.clients.entries()) {
+      if (ws.readyState !== WebSocket.OPEN) {
+        this.removeClient(ws);
+        continue;
+      }
+
+      if (meta.filter.tradeId && event.tradeId !== meta.filter.tradeId) continue;
+      if (meta.filter.eventType && event.eventType !== meta.filter.eventType) continue;
+
+      try {
+        ws.send(message);
+      } catch {
+        this.removeClient(ws);
+      }
+    }
+  }
+
+  /**
+   * Snapshot of connection state for the health check endpoint (issue #1036).
+   */
+  static getConnectionStats(): {
+    total: number;
+    perUserLimit: number;
+    globalLimit: number;
+    maxPerUser: number;
+  } {
+    const instance = EventStreamService.current;
+    let maxPerUser = 0;
+    if (instance) {
+      for (const count of instance.userCounts.values()) {
+        if (count > maxPerUser) maxPerUser = count;
+      }
+    }
+    return {
+      total: instance?.clients.size ?? 0,
+      perUserLimit: MAX_CONNECTIONS_PER_USER,
+      globalLimit: MAX_TOTAL_CONNECTIONS,
+      maxPerUser,
+    };
+  }
+
   stop(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    if (this.connectionGauge && this.connectionGaugeCallback) {
+      this.connectionGauge.removeCallback(this.connectionGaugeCallback);
+    }
     for (const ws of this.clients.keys()) {
-      ws.close();
+      try {
+        ws.close();
+      } catch {
+        /* no-op */
+      }
     }
     this.clients.clear();
+    this.userCounts.clear();
     this.wss.close();
+    if (EventStreamService.current === this) {
+      EventStreamService.current = null;
+    }
     appLogger.info("[EventStream] Stopped");
   }
 }

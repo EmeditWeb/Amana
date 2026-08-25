@@ -7,6 +7,35 @@ const stellarPublicKey = (fieldName: string) =>
     message: `Invalid Stellar public key for ${fieldName}`,
   });
 
+/**
+ * Coerce a query-string parameter to a number while producing a clear,
+ * actionable validation error for non-numeric input.
+ *
+ * `z.coerce.number()` would silently turn `"abc"` into `NaN` and surface a
+ * cryptic `Expected number, received nan` message. Instead we attempt the
+ * coercion explicitly and throw a descriptive ZodError when the value cannot
+ * be parsed, so the value is rejected before it ever reaches business logic.
+ */
+function numericQueryParam(
+  field: string,
+  schema: z.ZodTypeAny,
+) {
+  return z.preprocess((val: unknown) => {
+    if (val === undefined || val === null || val === "") return undefined;
+    const coerced = Number(val);
+    if (Number.isNaN(coerced)) {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `${field} must be a valid number`,
+        },
+      ]);
+    }
+    return coerced;
+  }, schema);
+}
+
 export const createTradeSchema = z.object({
   buyerAddress: stellarPublicKey("buyerAddress").optional(),
   sellerAddress: stellarPublicKey("sellerAddress"),
@@ -31,8 +60,8 @@ export const tradeIdParamSchema = z.object({
 
 export const listTradesQuerySchema = z.object({
   status: z.nativeEnum(TradeStatus).optional(),
-  page: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).default(1)),
-  limit: z.preprocess((val: unknown) => val === undefined ? undefined : Number(val), z.number().int().min(1).max(100).default(20)),
+  page: numericQueryParam("page", z.number().int().min(1).default(1)),
+  limit: numericQueryParam("limit", z.number().int().min(1).max(100).default(20)),
   sort: z.string().optional(),
 });
 
