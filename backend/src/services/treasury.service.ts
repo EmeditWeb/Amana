@@ -3,6 +3,7 @@ import { TOKEN_CONFIG } from "../config/token";
 import { env } from "../config/env";
 import { appLogger } from "../middleware/logger";
 import { isMediatorAddress } from "../lib/accessControl";
+import { AppError, ErrorCode } from "../errors/errorCodes";
 
 export class TreasuryService {
   private stellarService: StellarService;
@@ -35,7 +36,11 @@ export class TreasuryService {
     callerAddress: string,
   ): Promise<{ unsignedXdr: string }> {
     if (!this.isAdmin(callerAddress)) {
-      throw new Error("Only admin can withdraw treasury funds");
+      throw new AppError(
+        ErrorCode.FORBIDDEN,
+        "Only admin can withdraw treasury funds",
+        403,
+      );
     }
 
     appLogger.info(

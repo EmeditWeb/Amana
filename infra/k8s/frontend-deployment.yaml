@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: kingfrankhood/amana-frontend:latest
+          image: kingfrankhood/amana-frontend:1.0.0
           ports:
             - containerPort: 3000
               name: http
