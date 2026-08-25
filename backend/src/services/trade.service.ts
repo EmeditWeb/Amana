@@ -51,7 +51,7 @@ export type TradeListFilters = {
 };
 
 type TradeDatabase = Pick<PrismaClient, "trade" | "dispute" | "disputeCategory"> &
-  Partial<Pick<PrismaClient, "userWatchlist">>;
+  Partial<Pick<PrismaClient, "$transaction" | "userWatchlist">>;
 
 export class TradeAccessDeniedError extends Error {
   constructor() {
@@ -74,6 +74,15 @@ export class DisputeCategoryValidationError extends HttpError {
   constructor(category: string | number) {
     super(`Invalid dispute category: ${category}`);
     this.name = "DisputeCategoryValidationError";
+  }
+}
+
+export class DuplicateDisputeError extends HttpError {
+  status = 409;
+
+  constructor() {
+    super("A dispute already exists for this trade");
+    this.name = "DuplicateDisputeError";
   }
 }
 
@@ -333,17 +342,22 @@ export class TradeService {
           reasonHash,
         });
 
-        // Create DB record
-        // We store the plaintext reason for human review.
-        await this.prisma.dispute.create({
-          data: {
+        try {
+          await this.createDisputeAtomically({
             tradeId: trade.tradeId,
-            initiator: callerAddress,
+            callerAddress,
             reason,
-            status: DisputeStatus.OPEN,
             categoryId: resolvedCategoryId,
-          },
-        });
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            throw new DuplicateDisputeError();
+          }
+          throw error;
+        }
 
         await this.invalidateTradeCache(id, trade.tradeId);
 
@@ -351,6 +365,57 @@ export class TradeService {
       },
       { attributes: { "trade.id": id } },
     );
+  }
+
+  private async createDisputeAtomically(input: {
+    tradeId: string;
+    callerAddress: string;
+    reason: string;
+    categoryId: number;
+  }): Promise<void> {
+    const createDispute = async (tx: TradeDatabase) => {
+      const current = await tx.trade.findUnique({
+        where: { tradeId: input.tradeId },
+        select: {
+          tradeId: true,
+          buyerAddress: true,
+          sellerAddress: true,
+          status: true,
+        },
+      });
+
+      if (!current) {
+        throw new Error("Trade not found");
+      }
+
+      if (
+        current.buyerAddress !== input.callerAddress &&
+        current.sellerAddress !== input.callerAddress
+      ) {
+        throw new TradeAccessDeniedError();
+      }
+
+      if (current.status !== TradeStatus.FUNDED && current.status !== TradeStatus.DELIVERED) {
+        throw new DisputeTradeStatusError(current.status);
+      }
+
+      await tx.dispute.create({
+        data: {
+          tradeId: current.tradeId,
+          initiator: input.callerAddress,
+          reason: input.reason,
+          status: DisputeStatus.OPEN,
+          categoryId: input.categoryId,
+        },
+      });
+    };
+
+    if (this.prisma.$transaction) {
+      await this.prisma.$transaction((tx) => createDispute(tx as TradeDatabase));
+      return;
+    }
+
+    await createDispute(this.prisma);
   }
 
   private async resolveDisputeCategoryId(category: string, categoryId?: number): Promise<number> {
