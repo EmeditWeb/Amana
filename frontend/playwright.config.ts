@@ -28,6 +28,11 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
+      name: 'visual-regression',
+      testMatch: '**/*.visual.spec.ts',
+      use: { viewport: { width: 1280, height: 720 }, screenshot: 'on' },
+    },
+    {
       name: 'chromium-mobile',
       use: { ...devices['iPhone 12'], viewport: { width: 375, height: 667 } },
     },

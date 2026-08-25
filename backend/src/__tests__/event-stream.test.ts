@@ -1,17 +1,20 @@
 import { Server } from "http";
 import { WebSocket } from "ws";
+import jwt from "jsonwebtoken";
 import { EventStreamService } from "../services/event-stream";
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function openConn(server: Server, query: string, timeoutMs = 5000): Promise<WebSocket> {
+function openConn(server: Server, query: string, token: string, timeoutMs = 5000): Promise<WebSocket> {
   const address = server.address();
   if (!address || typeof address === "string") {
     return Promise.reject(new Error("Server is not listening on a port"));
   }
-  const ws = new WebSocket(`ws://localhost:${address.port}/api/v1/ws/events${query}`);
+  const ws = new WebSocket(`ws://localhost:${address.port}/api/v1/ws/events${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  } as any);
   return new Promise<WebSocket>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("connection timeout")), timeoutMs);
     ws.once("open", () => {
@@ -33,13 +36,16 @@ function openConn(server: Server, query: string, timeoutMs = 5000): Promise<WebS
 function connectAndReceive(
   server: Server,
   query: string,
+  token: string,
   timeoutMs = 5000,
 ): Promise<{ ws: WebSocket; message: any }> {
   const address = server.address();
   if (!address || typeof address === "string") {
     return Promise.reject(new Error("Server is not listening on a port"));
   }
-  const ws = new WebSocket(`ws://localhost:${address.port}/api/v1/ws/events${query}`);
+  const ws = new WebSocket(`ws://localhost:${address.port}/api/v1/ws/events${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  } as any);
   return new Promise<{ ws: WebSocket; message: any }>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("connection timeout")), timeoutMs);
     ws.once("message", (data) => {
@@ -56,6 +62,27 @@ function connectAndReceive(
 describe("EventStreamService connection limits and health (issue #1036)", () => {
   let server: Server;
   let stream: EventStreamService;
+  const secret = process.env.JWT_SECRET || "test-secret-at-least-32-characters-long";
+  const issuer = process.env.JWT_ISSUER || "amana";
+  const audience = process.env.JWT_AUDIENCE || "amana-api";
+
+  function makeToken(wallet: string, jti = undefined) {
+    const now = Math.floor(Date.now() / 1000);
+    return jwt.sign(
+      {
+        sub: wallet.toLowerCase(),
+        walletAddress: wallet.toLowerCase(),
+        jti: jti ?? `${wallet}-${now}`,
+        iss: issuer,
+        aud: audience,
+        iat: now,
+        nbf: now,
+        exp: now + 3600,
+      },
+      secret,
+      { algorithm: "HS256" }
+    );
+  }
 
   beforeEach((done) => {
     server = new Server();
@@ -76,7 +103,8 @@ describe("EventStreamService connection limits and health (issue #1036)", () => 
   });
 
   it("accepts a valid connection and sends a connected message", async () => {
-    const { ws, message } = await connectAndReceive(server, "?user=alice");
+    const token = makeToken("alice");
+    const { ws, message } = await connectAndReceive(server, "?user=alice", token);
     expect(message.type).toBe("connected");
     expect(EventStreamService.getConnectionStats().total).toBe(1);
     ws.close();
@@ -87,8 +115,10 @@ describe("EventStreamService connection limits and health (issue #1036)", () => 
     const closed: WebSocket[] = [];
 
     for (let i = 0; i < 7; i++) {
+      const token = makeToken("bob", `bob-${i}`);
       const ws = new WebSocket(
-        `ws://localhost:${(server.address() as any).port}/api/v1/ws/events?user=bob`
+        `ws://localhost:${(server.address() as any).port}/api/v1/ws/events?user=bob`,
+        { headers: { Authorization: `Bearer ${token}` } } as any,
       );
       ws.once("open", () => opened.push(ws));
       ws.once("close", () => closed.push(ws));
@@ -110,7 +140,8 @@ describe("EventStreamService connection limits and health (issue #1036)", () => 
   });
 
   it("exposes limits and connection count via getConnectionStats", async () => {
-    const ws = await openConn(server, "?user=carol");
+    const token = makeToken("carol");
+    const ws = await openConn(server, "?user=carol", token);
     const stats = EventStreamService.getConnectionStats();
     expect(stats.globalLimit).toBe(10_000);
     expect(stats.perUserLimit).toBe(5);

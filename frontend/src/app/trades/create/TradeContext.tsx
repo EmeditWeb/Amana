@@ -5,10 +5,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { z } from "zod";
+import { useDraftForm } from "@/hooks/useDraftForm";
 
-const STORAGE_KEY = "amana-trade-draft";
+const STORAGE_NAMESPACE = "trade:create";
 
 export type TradeData = {
   // Step 1
@@ -37,6 +40,19 @@ const defaults: TradeData = {
   deliveryDays: "7",
   notes: "",
 };
+
+const TradeDataSchema = z.object({
+  commodity: z.string(),
+  quantity: z.string(),
+  unit: z.string(),
+  pricePerUnit: z.string(),
+  currency: z.string(),
+  sellerAddress: z.string(),
+  buyerRatio: z.number(),
+  sellerRatio: z.number(),
+  deliveryDays: z.string(),
+  notes: z.string(),
+});
 
 // --- Step context (only step navigation) ---
 type TradeStepContextType = {
@@ -78,14 +94,36 @@ function loadDraft(): TradeData {
 
 export function TradeProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState(1);
-  const [data, setData] = useState<TradeData>(() => loadDraft());
-
-  // Persist draft to localStorage on every change
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  const draft = useDraftForm<TradeData>(STORAGE_NAMESPACE, TradeDataSchema);
+  const [data, setData] = useState<TradeData>(() => {
+    if (typeof window === "undefined") return defaults;
+    try {
+      const loaded = draft.load();
+      return loaded ? { ...defaults, ...loaded } : defaults;
+    } catch {
+      return defaults;
     }
-  }, [data]);
+  });
+
+  // Debounced auto-save (500ms) to reduce localStorage churn
+  const saveTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    saveTimer.current = window.setTimeout(() => {
+      try {
+        draft.save(data);
+      } catch {
+        // ignore storage errors
+      }
+    }, 500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [data, draft]);
 
   const update = useCallback(
     (partial: Partial<TradeData>) =>
@@ -95,8 +133,10 @@ export function TradeProvider({ children }: { children: React.ReactNode }) {
 
   const clearDraft = useCallback(() => {
     setData(defaults);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(STORAGE_KEY);
+    try {
+      draft.clear();
+    } catch {
+      // ignore
     }
   }, []);
 
