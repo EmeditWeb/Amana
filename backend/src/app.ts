@@ -51,6 +51,7 @@ import { PrismaClient } from "@prisma/client";
 import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
+import { csrfProtection } from "./middleware/csrf.middleware";
 
 // Fail fast at boot if required environment variables are missing
 validateEnvironment();
