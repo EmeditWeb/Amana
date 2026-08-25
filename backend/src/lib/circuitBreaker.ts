@@ -1,3 +1,7 @@
+// Canonical circuit breaker implementation.
+// All services MUST import from this file. The old circuit-breaker.ts has been
+// removed. See: https://github.com/KingFRANKHOOD/Amana/issues/1025
+
 export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
 
 export interface CircuitBreakerOptions {
@@ -125,4 +129,61 @@ export class CircuitBreaker {
       this.successCount = 0;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compatibility shims (previously exported by circuit-breaker.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Module-level default breaker used by the legacy `withCircuitBreaker` API.
+ * Registered as "default" in the circuit-breaker registry so it appears in
+ * health check listings alongside the named breakers.
+ */
+const _defaultBreaker = new CircuitBreaker("default", {
+  failureThreshold: 5,
+  cooldownMs: 30_000,
+});
+
+/**
+ * Convenience wrapper that executes `operation` through the supplied (or
+ * default) circuit breaker using the canonical `.call()` API.
+ *
+ * @deprecated Prefer constructing a named `CircuitBreaker` and calling
+ * `.call()` directly.  This shim exists only to support existing callers
+ * migrated from the old circuit-breaker.ts.
+ */
+export async function withCircuitBreaker<T>(
+  operation: () => Promise<T>,
+  breaker: CircuitBreaker = _defaultBreaker,
+): Promise<T> {
+  return breaker.call(operation);
+}
+
+/**
+ * Returns the module-level default circuit breaker.
+ *
+ * @deprecated Construct a named `CircuitBreaker` instance instead.
+ */
+export function getCircuitBreaker(): CircuitBreaker {
+  return _defaultBreaker;
+}
+
+/**
+ * Resets the default circuit breaker to a clean CLOSED state.
+ * **For use in tests only.**
+ */
+export function __resetCircuitBreakerForTests(): void {
+  // Reset by invoking the internal state-reset helper exposed for testing.
+  // Cast to access private fields – acceptable in test-only helper code.
+  const b = _defaultBreaker as unknown as {
+    state: CircuitState;
+    failureCount: number;
+    successCount: number;
+    openedAt: number | null;
+  };
+  b.state = "CLOSED";
+  b.failureCount = 0;
+  b.successCount = 0;
+  b.openedAt = null;
 }

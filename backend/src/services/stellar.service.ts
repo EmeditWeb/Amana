@@ -5,7 +5,7 @@ import {
   networkPassphrase 
 } from '../config/stellar';
 import { retryAsync } from "../lib/retry";
-import { withCircuitBreaker, CircuitBreaker } from "../lib/circuit-breaker";
+import { withCircuitBreaker, CircuitBreaker } from "../lib/circuitBreaker";
 import { appLogger } from "../middleware/logger";
 import { TracingHelper } from "../config/tracing";
 import { TOKEN_CONFIG } from "../config/token";
@@ -199,9 +199,9 @@ export class StellarService {
     this.horizonServer = horizonServer;
     this.sorobanRpc = sorobanRpcClient;
     this.networkPassphrase = networkPassphrase;
-    this.paymentCircuitBreaker = new CircuitBreaker({
+    this.paymentCircuitBreaker = new CircuitBreaker("stellar-payment", {
       failureThreshold: 5,
-      resetTimeoutMs: 30_000,
+      cooldownMs: 30_000,
     });
   }
 
@@ -215,7 +215,7 @@ export class StellarService {
   }
 
   public getPaymentCircuitBreakerState(): string {
-    return this.paymentCircuitBreaker.getState();
+    return this.paymentCircuitBreaker.currentState;
   }
 
   public async getContractTradeState(

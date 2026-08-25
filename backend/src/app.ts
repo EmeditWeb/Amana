@@ -44,6 +44,7 @@ import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
+import { csrfProtection } from "./middleware/csrf.middleware";
 
 // Fail fast at boot if required environment variables are missing
 validateEnvironment();
@@ -137,6 +138,13 @@ export function createApp(): express.Application {
   app.use(loggerMiddleware);
   // Structured per-request logger: method, path, status, durationMs, correlationId, userId, userAgent, ip
   app.use(requestLoggerMiddleware);
+
+  // CSRF protection: validates Origin/Referer on state-changing requests.
+  // Gated behind the CSRF_PROTECTION feature flag — enable via admin feature
+  // flag API (/admin/features/CSRF_PROTECTION).  Runs before all route
+  // handlers so no state-changing endpoint is inadvertently unprotected.
+  // See: backend/src/middleware/csrf.middleware.ts for the full policy doc.
+  app.use(csrfProtection());
 
   // Enhanced health check with deep introspection
   app.use("/health", createHealthRouter());

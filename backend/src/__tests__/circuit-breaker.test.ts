@@ -1,138 +1,153 @@
+/**
+ * Tests for the backward-compatibility shims exported from circuitBreaker.ts
+ * (withCircuitBreaker, getCircuitBreaker, __resetCircuitBreakerForTests).
+ *
+ * These shims previously lived in the deleted circuit-breaker.ts file.
+ * See: https://github.com/KingFRANKHOOD/Amana/issues/1025
+ */
 import {
   CircuitBreaker,
   withCircuitBreaker,
+  getCircuitBreaker,
   __resetCircuitBreakerForTests,
-} from "../lib/circuit-breaker";
+} from "../lib/circuitBreaker";
 
-describe("CircuitBreaker", () => {
+describe("CircuitBreaker (legacy-compatible API via canonical module)", () => {
   let breaker: CircuitBreaker;
 
   beforeEach(() => {
     __resetCircuitBreakerForTests();
-    breaker = new CircuitBreaker({
+    // Use the new named-breaker API with a deterministic clock for fast tests
+    let fakeNow = 0;
+    breaker = new CircuitBreaker("legacy-compat-test", {
       failureThreshold: 3,
-      resetTimeoutMs: 1000,
+      cooldownMs: 1_000,
+      now: () => fakeNow,
     });
+    // Expose advanceTime via closure-captured variable on the breaker object
+    (breaker as any).__advanceTime = (ms: number) => { fakeNow += ms; };
   });
 
-  it("starts in closed state", () => {
-    expect(breaker.getState()).toBe("closed");
-    expect(breaker.isAvailable()).toBe(true);
+  function advanceTime(ms: number) {
+    (breaker as any).__advanceTime(ms);
+  }
+
+  it("starts in CLOSED state", () => {
+    expect(breaker.currentState).toBe("CLOSED");
   });
 
-  it("opens after reaching failure threshold", () => {
-    breaker.recordFailure();
-    breaker.recordFailure();
-    expect(breaker.getState()).toBe("closed");
+  it("opens after reaching failure threshold", async () => {
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    expect(breaker.currentState).toBe("CLOSED");
 
-    breaker.recordFailure();
-    expect(breaker.getState()).toBe("open");
-    expect(breaker.isAvailable()).toBe(false);
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    expect(breaker.currentState).toBe("OPEN");
   });
 
-  it("resets failure count on success", () => {
-    breaker.recordFailure();
-    breaker.recordFailure();
-    breaker.recordSuccess();
+  it("resets failure count on success while CLOSED", async () => {
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.resolve("ok"));
 
-    breaker.recordFailure();
-    breaker.recordFailure();
-    expect(breaker.getState()).toBe("closed");
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    // Only 2 failures after the reset – still CLOSED
+    expect(breaker.currentState).toBe("CLOSED");
   });
 
-  it("transitions to half-open after reset timeout", async () => {
-    const shortBreaker = new CircuitBreaker({
+  it("transitions to HALF_OPEN after cooldown elapses", async () => {
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    await breaker.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    expect(breaker.currentState).toBe("OPEN");
+
+    advanceTime(1_001);
+    // Next call triggers cooldown → HALF_OPEN transition
+    await breaker.call(() => Promise.resolve("ok")).catch(() => {});
+    // After 1 success (successThreshold=2 default) still HALF_OPEN
+    expect(breaker.currentState).toBe("HALF_OPEN");
+  });
+
+  it("closes after successful half-open probes", async () => {
+    let fakeNow2 = 0;
+    const b = new CircuitBreaker("hopen-close-test", {
       failureThreshold: 1,
-      resetTimeoutMs: 50,
+      successThreshold: 1,
+      cooldownMs: 50,
+      now: () => fakeNow2,
     });
+    await b.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    expect(b.currentState).toBe("OPEN");
 
-    shortBreaker.recordFailure();
-    expect(shortBreaker.getState()).toBe("open");
-
-    await new Promise((r) => setTimeout(r, 60));
-    expect(shortBreaker.getState()).toBe("half-open");
-    expect(shortBreaker.isAvailable()).toBe(true);
-  });
-
-  it("closes after successful half-open probe", async () => {
-    const shortBreaker = new CircuitBreaker({
-      failureThreshold: 1,
-      resetTimeoutMs: 50,
-    });
-
-    shortBreaker.recordFailure();
-    await new Promise((r) => setTimeout(r, 60));
-    expect(shortBreaker.getState()).toBe("half-open");
-
-    shortBreaker.recordSuccess();
-    expect(shortBreaker.getState()).toBe("closed");
+    fakeNow2 += 51;
+    await b.call(() => Promise.resolve("ok"));
+    expect(b.currentState).toBe("CLOSED");
   });
 
   it("re-opens after failed half-open probe", async () => {
-    const shortBreaker = new CircuitBreaker({
+    let fakeNow3 = 0;
+    const b = new CircuitBreaker("hopen-reopen-test", {
       failureThreshold: 1,
-      resetTimeoutMs: 50,
+      cooldownMs: 50,
+      now: () => fakeNow3,
     });
-
-    shortBreaker.recordFailure();
-    await new Promise((r) => setTimeout(r, 60));
-    expect(shortBreaker.getState()).toBe("half-open");
-
-    shortBreaker.recordFailure();
-    expect(shortBreaker.getState()).toBe("open");
-  });
-
-  it("reset restores closed state", () => {
-    breaker.recordFailure();
-    breaker.recordFailure();
-    breaker.recordFailure();
-    expect(breaker.getState()).toBe("open");
-
-    breaker.reset();
-    expect(breaker.getState()).toBe("closed");
-    expect(breaker.isAvailable()).toBe(true);
+    await b.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    fakeNow3 += 51;
+    await b.call(() => Promise.reject(new Error("e"))).catch(() => {});
+    expect(b.currentState).toBe("OPEN");
   });
 });
 
-describe("withCircuitBreaker", () => {
-  it("executes operation when circuit is closed", async () => {
-    const breaker = new CircuitBreaker({
+describe("withCircuitBreaker (backward-compat shim)", () => {
+  it("executes operation when circuit is CLOSED", async () => {
+    const b = new CircuitBreaker("shim-closed-test", {
       failureThreshold: 3,
-      resetTimeoutMs: 1000,
+      cooldownMs: 1_000,
     });
-
-    const result = await withCircuitBreaker(async () => "success", breaker);
+    const result = await withCircuitBreaker(async () => "success", b);
     expect(result).toBe("success");
   });
 
-  it("throws when circuit is open", async () => {
-    const breaker = new CircuitBreaker({
+  it("throws when circuit is OPEN", async () => {
+    const b = new CircuitBreaker("shim-open-test", {
       failureThreshold: 1,
-      resetTimeoutMs: 60000,
+      cooldownMs: 60_000,
     });
-
-    breaker.recordFailure();
+    await b.call(() => Promise.reject(new Error("boom"))).catch(() => {});
 
     await expect(
-      withCircuitBreaker(async () => "should not run", breaker)
-    ).rejects.toThrow("Circuit breaker is open");
+      withCircuitBreaker(async () => "should not run", b)
+    ).rejects.toThrow("Circuit breaker");
   });
 
   it("records failure when operation throws", async () => {
-    const breaker = new CircuitBreaker({
+    const b = new CircuitBreaker("shim-failure-test", {
       failureThreshold: 3,
-      resetTimeoutMs: 1000,
+      cooldownMs: 1_000,
     });
 
     await expect(
       withCircuitBreaker(async () => {
         throw new Error("service error");
-      }, breaker)
+      }, b)
     ).rejects.toThrow("service error");
 
-    expect(breaker.getState()).toBe("closed");
-    breaker.recordFailure();
-    breaker.recordFailure();
-    expect(breaker.getState()).toBe("open");
+    // Only 1 failure so far, still CLOSED
+    expect(b.currentState).toBe("CLOSED");
+  });
+});
+
+describe("getCircuitBreaker", () => {
+  it("returns a CircuitBreaker instance", () => {
+    __resetCircuitBreakerForTests();
+    const cb = getCircuitBreaker();
+    expect(cb).toBeInstanceOf(CircuitBreaker);
+  });
+
+  it("returns same instance across calls", () => {
+    const a = getCircuitBreaker();
+    const b = getCircuitBreaker();
+    expect(a).toBe(b);
   });
 });
