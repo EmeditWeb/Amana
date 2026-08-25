@@ -2,7 +2,7 @@ import { Worker, Job } from "bullmq";
 import { createQueueConnection } from "../queue";
 import { TrustScoreService } from "../../services/trustScore.service";
 import { prisma } from "../../lib/db";
-import { appLogger } from "../../middleware/logger";
+import { getJobContextualLogger } from "../../lib/logging";
 
 export interface TrustScoreRecalculationJobData {
   triggeredBy: string;
@@ -17,10 +17,8 @@ export function createTrustScoreRecalculationWorker() {
   const worker = new Worker<TrustScoreRecalculationJobData>(
     QUEUE_NAME,
     async (job: Job<TrustScoreRecalculationJobData>) => {
-      appLogger.info(
-        { jobId: job.id, triggeredBy: job.data.triggeredBy },
-        "[TrustScoreWorker] Processing recalculation job",
-      );
+      const logger = getJobContextualLogger(job.id, undefined, { triggeredBy: job.data.triggeredBy });
+      logger.info("[TrustScoreWorker] Processing recalculation job");
 
       const service = new TrustScoreService(prisma);
 
@@ -28,9 +26,8 @@ export function createTrustScoreRecalculationWorker() {
         const result = await service.calculateTrustScore(
           job.data.walletAddress,
         );
-        appLogger.info(
+        logger.info(
           {
-            jobId: job.id,
             walletAddress: job.data.walletAddress,
             trustScore: result.trustScore,
             tier: result.tier,
@@ -40,10 +37,7 @@ export function createTrustScoreRecalculationWorker() {
         return result;
       }
 
-      appLogger.info(
-        { jobId: job.id },
-        "[TrustScoreWorker] Batch recalculation not yet implemented",
-      );
+      logger.info("[TrustScoreWorker] Batch recalculation not yet implemented");
 
       return { processed: 0 };
     },
@@ -58,17 +52,13 @@ export function createTrustScoreRecalculationWorker() {
   );
 
   worker.on("completed", (job) => {
-    appLogger.info(
-      { jobId: job.id },
-      "[TrustScoreWorker] Job completed",
-    );
+    const logger = getJobContextualLogger(job.id);
+    logger.info("[TrustScoreWorker] Job completed");
   });
 
   worker.on("failed", (job, err) => {
-    appLogger.error(
-      { jobId: job?.id, error: err.message },
-      "[TrustScoreWorker] Job failed",
-    );
+    const logger = getJobContextualLogger(job?.id);
+    logger.error({ error: err.message }, "[TrustScoreWorker] Job failed");
   });
 
   return worker;

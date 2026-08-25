@@ -7,7 +7,6 @@ import {
   buildReleaseFundsTx,
   ContractService,
 } from "../services/contract.service";
-import { appLogger } from "../middleware/logger";
 import {
   TradeAccessDeniedError,
   TradeService,
@@ -16,6 +15,8 @@ import {
 } from "../services/trade.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 import { getMediatorAllowlist } from "../lib/accessControl";
+import { logErrorWithContext, logBusinessEvent } from "../lib/logging";
+import { tradeStatusEvents } from "../services/tradeStatusEvents";
 
 const AMOUNT_USDC_PATTERN = /^\d+(?:\.\d{1,7})?$/;
 
@@ -117,11 +118,17 @@ export class TradeController {
         buyerLossBps: buyerBps,
         sellerLossBps: sellerBps,
       });
+      tradeStatusEvents.publish({
+        trade_id: tradeId,
+        status: TradeStatus.PENDING_SIGNATURE,
+        event_type: "trade_created",
+      });
 
+      logBusinessEvent(req, 'trade_created', { tradeId, buyerAddress, sellerAddress, amountUsdc: normalizedAmountUsdc });
       return res.status(201).json({ tradeId, unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) return next(error);
-      appLogger.error({ error }, "Trade creation failed");
+      logErrorWithContext(req, error, { stage: 'trade_creation' }, "Trade creation failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to create trade", 500),
       );
@@ -133,8 +140,8 @@ export class TradeController {
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
+    const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     try {
-      const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       if (!tradeId) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Trade id is required", 400);
       }
@@ -173,7 +180,7 @@ export class TradeController {
       if (error instanceof TradeAccessDeniedError) {
         return next(new AppError(ErrorCode.TRADE_ACCESS_DENIED, "Forbidden", 403));
       }
-      appLogger.error({ error }, "Deposit transaction build failed");
+      logErrorWithContext(req, error, { tradeId, stage: 'deposit_tx_build' }, "Deposit transaction build failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to build deposit transaction", 500),
       );
@@ -217,6 +224,11 @@ export class TradeController {
       }
 
       const unsignedXdr = await buildConfirmDeliveryTx(trade, caller);
+      tradeStatusEvents.publish({
+        trade_id: trade.tradeId,
+        status: TradeStatus.DELIVERED,
+        event_type: "delivery_confirmed",
+      });
       res.status(200).json({ unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) {
@@ -271,6 +283,11 @@ export class TradeController {
       }
 
       const unsignedXdr = await buildReleaseFundsTx(trade, caller);
+      tradeStatusEvents.publish({
+        trade_id: trade.tradeId,
+        status: TradeStatus.COMPLETED,
+        event_type: "funds_released",
+      });
       res.status(200).json({ unsignedXdr });
     } catch (error) {
       if (error instanceof AppError) {
@@ -291,8 +308,8 @@ export class TradeController {
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
+    const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     try {
-      const tradeId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       if (!tradeId) {
         throw new AppError(ErrorCode.VALIDATION_ERROR, "Trade id is required", 400);
       }
@@ -329,6 +346,11 @@ export class TradeController {
         typeof category === "string" ? category : "",
         parsedCategoryId ?? undefined,
       );
+      tradeStatusEvents.publish({
+        trade_id: tradeId,
+        status: TradeStatus.DISPUTED,
+        event_type: "dispute_initiated",
+      });
 
       return res.status(200).json({ unsignedXdr });
     } catch (error) {
@@ -352,7 +374,7 @@ export class TradeController {
         return next(new AppError(ErrorCode.TRADE_NOT_FOUND, "Trade not found", 404));
       }
 
-      appLogger.error({ error }, "Dispute initiation failed");
+      logErrorWithContext(req, error, { tradeId, stage: 'dispute_initiation' }, "Dispute initiation failed");
       return next(
         new AppError(ErrorCode.TRADE_BUILD_FAILED, "Failed to initiate dispute", 500),
       );

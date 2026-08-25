@@ -12,19 +12,22 @@ disabledRules = ["generic-api-key"]
 # Paths and patterns that are safe to ignore.
 [[allowlists]]
 description = "Example / placeholder files"
+# gitleaks `paths` entries are regexes, not glob patterns — a bare leading
+# `*` (as in a glob like `*.md`) is not valid regex syntax and crashes the
+# scanner entirely. Anchored, escaped equivalents below.
 paths = [
-  ".env.*.example",
-  ".env.example",
-  "docs/",
-  "*.md",
+  '''\.env\..*\.example$''',
+  '''\.env\.example$''',
+  '''^docs/''',
+  '''\.md$''',
 ]
 
 [[allowlists]]
 description = "Test files — fake credentials used in test fixtures"
 paths = [
-  "backend/src/__tests__/",
-  "**/*.test.ts",
-  "**/*.spec.ts",
+  '''backend/src/__tests__/''',
+  '''\.test\.ts$''',
+  '''\.spec\.ts$''',
 ]
 
 [[allowlists]]
@@ -52,9 +55,18 @@ regexes = [
 [[rules]]
 id          = "amana-jwt-secret"
 description = "Amana JWT_SECRET assigned a real value"
-regex       = '''[Jj][Ww][Tt]_[Ss][Ee][Cc][Rr][Ee][Tt]\s*=\s*["']?(?!your-|change-|test-)[A-Za-z0-9+/=_\-]{20,}'''
+# Go's RE2 engine (used by gitleaks) does not support lookaheads, so
+# placeholder values are excluded via this rule's own allowlist below
+# instead of a `(?!...)` negative lookahead in the match regex itself.
+regex       = '''[Jj][Ww][Tt]_[Ss][Ee][Cc][Rr][Ee][Tt]\s*=\s*["']?[A-Za-z0-9+/=_\-]{20,}'''
 tags        = ["secret", "jwt"]
 severity    = "critical"
+
+  [rules.allowlist]
+  description = "Placeholder JWT_SECRET values"
+  regexes = [
+    '''[Jj][Ww][Tt]_[Ss][Ee][Cc][Rr][Ee][Tt]\s*=\s*["']?(your-|change-|test-)''',
+  ]
 
 [[rules]]
 id          = "stellar-secret-key"

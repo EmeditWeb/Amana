@@ -5,11 +5,14 @@ import { appLogger } from "../middleware/logger";
 export type AlertType =
   | "db_connection_failure"
   | "redis_connection_failure"
-  | "cache_unavailable";
+  | "cache_unavailable"
+  | "pg_pool_saturation";
+
+export type AlertSeverity = "critical" | "warning";
 
 export interface AlertPayload {
   type: AlertType;
-  severity: "critical";
+  severity: AlertSeverity;
   timestamp: string;
   message: string;
   details?: Record<string, unknown>;
@@ -35,6 +38,7 @@ export class AlertService {
     type: AlertType,
     message: string,
     details: Record<string, unknown> = {},
+    severity: AlertSeverity = "critical",
   ): Promise<void> {
     if (!this.alertWebhookUrl) {
       return;
@@ -49,7 +53,7 @@ export class AlertService {
 
     const payload: AlertPayload = {
       type,
-      severity: "critical",
+      severity,
       timestamp: new Date().toISOString(),
       message,
       details,
@@ -83,6 +87,21 @@ export class AlertService {
     } catch (error) {
       appLogger.error({ error, type }, "Failed to dispatch alert");
     }
+  }
+
+  async dispatchPoolSaturation(
+    activeConnections: number,
+    maxConnections: number,
+    details: Record<string, unknown> = {},
+  ): Promise<void> {
+    const percentage = Math.round((activeConnections / maxConnections) * 100);
+    const message = `PostgreSQL connection pool saturation: ${activeConnections}/${maxConnections} connections in use (${percentage}%)`;
+    await this.dispatch("pg_pool_saturation", message, {
+      activeConnections,
+      maxConnections,
+      poolUsagePercent: percentage,
+      ...details,
+    }, "warning");
   }
 
   isConfigured(): boolean {

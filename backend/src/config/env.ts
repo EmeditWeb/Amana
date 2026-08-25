@@ -110,6 +110,8 @@ export const envSchema = z.object({
   WEBHOOK_RETRY_BASE_MS: z.coerce.number().int().positive().default(1000),
   WEBHOOK_RETRY_MAX_MS: z.coerce.number().int().positive().default(30000),
   ADMIN_STATS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
+  // API versioning
+  LEGACY_API_SUNSET_DATE: z.string().default('Wed, 28 Oct 2026 00:00:00 GMT'),
   // Rate limiting configuration
   TRUST_PROXY: z
     .enum(['true', 'false'])
@@ -123,6 +125,29 @@ export const envSchema = z.object({
   RATE_LIMIT_USER_MAX: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_DISPUTE_WINDOW_MS: z.coerce.number().int().positive().default(60 * 60 * 1000),
   RATE_LIMIT_DISPUTE_MAX: z.coerce.number().int().positive().default(5),
+
+  // PostgreSQL connection pool tuning
+  DATABASE_POOL_SIZE: z.coerce.number().int().positive().default(15),
+  DATABASE_POOL_TIMEOUT: z.coerce.number().int().positive().default(10),
+  DATABASE_MAX_OVERFLOW: z.coerce.number().int().nonnegative().default(5),
+  DATABASE_IDLE_INACTIVE_SESSION_TIMEOUT: z.coerce.number().int().positive().default(300000),
+  DATABASE_CONNECTION_QUERY_TIMEOUT: z.coerce.number().int().positive().default(5000),
+
+  // PgBouncer
+  PGBOUNCER_ENABLED: z
+    .string()
+    .default('false')
+    .transform((value: string) => value.toLowerCase() === 'true'),
+  PGBOUNCER_POOL_MODE: z.enum(['transaction', 'session', 'statement']).default('transaction'),
+  PGBOUNCER_DEFAULT_POOL_SIZE: z.coerce.number().int().positive().default(15),
+  PGBOUNCER_RESERVE_POOL_SIZE: z.coerce.number().int().nonnegative().default(5),
+  PGBOUNCER_RESERVE_POOL_TIMEOUT: z.coerce.number().int().positive().default(10),
+  PGBOUNCER_SERVER_IDLE_TIMEOUT: z.coerce.number().int().positive().default(600),
+  PGBOUNCER_SERVER_LIFETIME: z.coerce.number().int().positive().default(3600),
+
+  // Pool saturation alerting
+  POOL_SATURATION_WARN_THRESHOLD: z.coerce.number().int().positive().default(80),
+  POOL_SATURATION_WARN_DURATION_MS: z.coerce.number().int().positive().default(300000),
 
   // Trust Score configuration
   TRUST_SCORE_DECAY_HALF_LIFE_DAYS: z.coerce.number().int().positive().default(90),

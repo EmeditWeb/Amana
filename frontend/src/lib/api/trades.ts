@@ -1,9 +1,11 @@
 import { createQueryString, request } from "./client";
+import { getApiBaseUrl } from "./env";
 import type {
   CreateTradeRequest,
   CreateTradeResponse,
   DepositResponse,
   EvidenceResponse,
+  EvidenceUploadResponse,
   SubmitManifestRequest,
   SubmitManifestResponse,
   TradeHistoryResponse,
@@ -13,12 +15,13 @@ import type {
 } from "./types";
 
 export const tradesApi = {
-  list: (token: string, params?: { status?: string; page?: number; limit?: number }) =>
+  list: (token: string, params?: { status?: string; page?: number; limit?: number; sort?: string }) =>
     request<TradeListResponse>(
       `/trades${createQueryString({
         status: params?.status,
         page: params?.page,
         limit: params?.limit,
+        sort: params?.sort,
       })}`,
       { token },
     ),
@@ -31,6 +34,18 @@ export const tradesApi = {
 
   getEvidence: (token: string, id: string) =>
     request<EvidenceResponse>(`/trades/${id}/evidence`, { token }),
+
+  uploadEvidence: (token: string, tradeId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("tradeId", tradeId);
+    formData.append("file", file);
+
+    return request<EvidenceUploadResponse>("/evidence/video", {
+      method: "POST",
+      token,
+      body: formData,
+    });
+  },
 
   submitManifest: (token: string, tradeId: string, data: SubmitManifestRequest) =>
     request<SubmitManifestResponse>(`/trades/${tradeId}/manifest`, {
@@ -73,4 +88,23 @@ export const tradesApi = {
       token,
       body: JSON.stringify({ reason, category }),
     }),
+
+  exportCsv: async (
+    token: string,
+    params?: { status?: string; from?: string; to?: string },
+  ) => {
+    const response = await fetch(
+      `${getApiBaseUrl()}/trades/export${createQueryString({
+        format: "csv",
+        status: params?.status,
+        from: params?.from,
+        to: params?.to,
+      })}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) {
+      throw new Error(response.statusText || "Failed to export trades");
+    }
+    return response.blob();
+  },
 };

@@ -48,6 +48,34 @@ Buyer            Frontend          Backend           Stellar          Database
   │ [Ready for delivery]              │                │                 │
 ```
 
+## Evidence Submission and Dispute Resolution
+
+```
+Buyer/Seller     Frontend          Backend            Pinata            Database
+    │               │                 │                 │                 │
+    ├─Select File─>│                 │                 │                 │
+    │  (photo.jpg) │                 │                 │                 │
+    │               │                 │                 │                 │
+    ├─Submit────────>                 │                 │                 │
+    │               │─POST /upload───>│                 │                 │
+    │               │ (multipart)     │                 │                 │
+    │               │                 ├─Add File──────>│                 │
+    │               │                 │ (to IPFS)       │                 │
+    │               │                 │<─CID───────────│                 │
+    │               │<─Success────────│ (bafybeiabc)   │                 │
+    │               │ (CID)           │                 │                 │
+    │<─Confirmed───┤                 │                 │                 │
+    │               │                 ├─Store Metadata──────────────────>│
+    │               │                 │ (CID, filename,                  │
+    │               │                 │  mimeType, etc)                  │
+    │               │                 │                 │                 │
+    │               │                 ├─Log Audit────────────────────────>
+    │               │                 │ EVENT_SUBMITTED                   │
+    │               │                 │                 │                 │
+    │               │<─Complete───────│                 │                 │
+    │<─Upload Done─┤                 │                 │                 │
+```
+
 ## Audit Trail Generation and Verification
 
 ```
@@ -148,6 +176,70 @@ Parties          Frontend          Backend           Mediator         Database
   │                  │                 │                 │                 │
 ```
 
+## Webhook Notification Flow
+
+```
+Backend           Event Queue       Worker             Seller            Stellar
+  │                  │                │                │                │
+  ├─Trade FUNDED───>│                │                │                │
+  │ (event)         │                │                │                │
+  │                  │                │                │                │
+  │                  ├─Enqueue────────>                │                │
+  │                  │ (BullMQ)       │                │                │
+  │                  │                │                │                │
+  │                  │                ├─Retrieve────────>                │
+  │                  │                │ (async worker)  │                │
+  │                  │                │                │                │
+  │                  │                ├─POST Webhook──────────────────>│
+  │                  │                │ (seller.webhook)│                │
+  │                  │                │                │                │
+  │                  │                │                ├─Log────────────>│
+  │                  │                │                │ (new trade)     │
+  │                  │                │                │                │
+  │                  │                │<─200 OK────────│                │
+  │                  │                │                │                │
+  │                  │<─Mark Complete─│                │                │
+  │                  │ (delivery)     │                │                │
+  │                  │                │                │                │
+  │<─Success────────│                │                │                │
+```
+
+## Rate Limiting and Authentication Flow
+
+```
+Client            Express           Auth Middleware   JWT Service      Database
+  │                 │                 │                 │                │
+  ├─Request──────>│                 │                 │                │
+  │ (with JWT)     │                 │                 │                │
+  │                 │                 │                 │                │
+  │                 ├─Extract Header──>                │                │
+  │                 │                 │                 │                │
+  │                 │                 ├─Decode Token──>│                │
+  │                 │                 │                 │                │
+  │                 │                 │<─Payload──────│                │
+  │                 │                 │                 │                │
+  │                 │                 ├─Check Revocation────────────────>
+  │                 │                 │ (Redis blacklist)               │
+  │                 │                 │<─Not Revoked────────────────────>
+  │                 │                 │                 │                │
+  │                 │                 ├─Verify Signature──────────────>│
+  │                 │                 │ (HS256)         │                │
+  │                 │                 │<─Valid────────│                │
+  │                 │                 │                 │                │
+  │                 ├─Rate Limit Check             │                │
+  │                 │ (by wallet addr)│                 │                │
+  │                 │                 │                 │                │
+  │                 │<─Within Limits──│                 │                │
+  │                 │                 │                 │                │
+  │                 ├─Proceed to Route Handler      │                │
+  │                 │                 │                 │                │
+  │                 ├─Log Request────>                │                │
+  │                 │ (Pino)          │                 │                │
+  │                 │                 │                 │                │
+  │<─Response──────│                 │                 │                │
+  │                 │                 │                 │                │
+```
+
 ## Key Operations Summary
 
 | Operation | Primary Actors | Key Systems | Audit Events |
@@ -161,3 +253,4 @@ Parties          Frontend          Backend           Mediator         Database
 | Dispute Resolve | Mediator → Stellar → Backend | Blockchain, Database | RESOLVED |
 | Trade Complete | Backend → Stellar | Blockchain, Database | COMPLETED |
 | Audit Verify | Auditor → Backend → Crypto | Signing Keys | (verification only) |
+

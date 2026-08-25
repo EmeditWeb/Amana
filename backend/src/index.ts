@@ -5,6 +5,8 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { prisma } from "./lib/db";
 import { EventListenerService } from "./services/eventListener.service";
+import { EventIndexerService } from "./services/event-indexer";
+import { EventStreamService } from "./services/event-stream";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { appLogger } from "./middleware/logger";
@@ -12,13 +14,16 @@ import { initializeTracing } from "./config/tracing";
 import { HealthService } from "./services/health.service";
 import { createEvidenceVerificationWorker } from "./jobs/workers/evidence-verification.worker";
 import { createTrustScoreRecalculationWorker } from "./jobs/workers/trust-score-recalculation.worker";
-import { evidenceVerificationQueue, trustScoreRecalculationQueue } from "./jobs/queue";
+import { createIdempotencyCleanupWorker, scheduleIdempotencyCleanup } from "./jobs/workers/idempotency-cleanup.worker";
+import { evidenceVerificationQueue, trustScoreRecalculationQueue, webhookQueue, notificationQueue, exportQueue } from "./jobs/queue";
+import { registerQueueForMetrics, startQueueMetricsCollection } from "./lib/bullMetrics";
 
 
 // Initialize distributed tracing before any other imports
 initializeTracing();
 
-const app = createApp();
+const eventIndexerService = new EventIndexerService(prisma);
+const app = createApp({ prisma, eventIndexer: eventIndexerService });
 const port = env.PORT;
 
 const docsDir = path.join(__dirname, "docs");
@@ -94,7 +99,7 @@ async function bootstrap() {
     }
   }
 
-  app.listen(port, async () => {
+  const server = app.listen(port, async () => {
     appLogger.info({ port }, "Amana backend listening");
 
     try {
@@ -103,6 +108,28 @@ async function bootstrap() {
     } catch (error) {
       appLogger.error({ error }, "Failed to start EventListenerService");
     }
+
+    try {
+      await eventIndexerService.start();
+      appLogger.info("EventIndexerService started successfully");
+    } catch (error) {
+      appLogger.error({ error }, "Failed to start EventIndexerService");
+    }
+
+    try {
+      new EventStreamService(server);
+      appLogger.info("EventStreamService initialized");
+    } catch (error) {
+      appLogger.warn({ error }, "Failed to initialize EventStreamService");
+    }
+
+    // Register BullMQ queues for Prometheus metrics and start collection
+    registerQueueForMetrics("webhooks", webhookQueue);
+    registerQueueForMetrics("notifications", notificationQueue);
+    registerQueueForMetrics("exports", exportQueue);
+    registerQueueForMetrics("evidence-verification", evidenceVerificationQueue);
+    registerQueueForMetrics("trust-score-recalculation", trustScoreRecalculationQueue);
+    startQueueMetricsCollection();
 
     // Start evidence verification worker for async jobs
     try {
@@ -118,6 +145,15 @@ async function bootstrap() {
       appLogger.info("TrustScoreRecalculationWorker started");
     } catch (error) {
       appLogger.error({ error }, "Failed to start TrustScoreRecalculationWorker");
+    }
+
+    // Start idempotency key GC worker and schedule daily cron
+    try {
+      createIdempotencyCleanupWorker();
+      await scheduleIdempotencyCleanup();
+      appLogger.info("IdempotencyCleanupWorker started");
+    } catch (error) {
+      appLogger.error({ error }, "Failed to start IdempotencyCleanupWorker");
     }
 
     // Schedule periodic evidence pin verification

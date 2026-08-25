@@ -27,6 +27,7 @@ on:
       - ".github/workflows/ci.yml"
       - "frontend/**"
       - "backend/**"
+      - "mobile/**"
       - "contracts/**"
       - "scripts/**"
       - "infra/**"
@@ -160,6 +161,11 @@ jobs:
         run: pnpm lint
         working-directory: mobile
 
+      - name: Mobile test
+        if: matrix.stack == 'mobile'
+        run: pnpm test
+        working-directory: mobile
+
       - name: Mobile security audit
         if: matrix.stack == 'mobile'
         run: pnpm audit --audit-level=high
@@ -210,6 +216,51 @@ jobs:
           name: ${{ matrix.stack }}-artifact
           path: ${{ matrix.stack == 'frontend' && 'frontend/coverage/' || matrix.stack == 'backend' && 'backend/coverage/' || matrix.stack == 'mobile' && 'mobile/ci-artifacts/' || matrix.stack == 'contracts' && 'contracts/amana_escrow/target/wasm32-unknown-unknown/release/amana_escrow.wasm' }}
           retention-days: 7
+
+  # Issue #998: container image vulnerability scanning. This repo does not
+  # currently build/publish Docker images anywhere in CI (no Dockerfile
+  # exists for backend or frontend — docker-compose.yml only references
+  # third-party postgres/redis images), so there is no image to scan yet.
+  # Trivy's filesystem-scan mode is the closest available equivalent today:
+  # it scans each stack's dependency manifests/lockfile for known CVEs in
+  # OS packages and application dependencies, which is the same class of
+  # finding image scanning would otherwise catch via the base image + app
+  # layer. Switch this to `scan-type: image` once real Dockerfiles and a
+  # build step exist for backend/frontend.
+  trivy-scan:
+    name: Trivy vulnerability scan (${{ matrix.stack }})
+    runs-on: ubuntu-latest
+    needs: changes
+    permissions:
+      contents: read
+      security-events: write
+    if: >
+      (matrix.stack == 'frontend' && needs.changes.outputs.frontend == 'true') ||
+      (matrix.stack == 'backend' && needs.changes.outputs.backend == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [frontend, backend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ matrix.stack }}
+          format: sarif
+          output: trivy-${{ matrix.stack }}.sarif
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.stack }}.sarif
+          category: trivy-${{ matrix.stack }}
 
   contract-tests:
     name: Frontend ↔ Backend Pact contracts

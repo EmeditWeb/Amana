@@ -431,13 +431,31 @@ export class ContractService {
   }
 
   private toContractAmount(amount: string): bigint {
+    if (!/^\d+(?:\.\d+)?$/.test(amount)) {
+      throw new Error("Invalid contract amount: expected a non-negative decimal string");
+    }
+
     const [wholePart, fractionPart = ""] = amount.split(".");
+    if (!wholePart) {
+      throw new Error("Invalid contract amount: whole number component is required");
+    }
+
+    if (fractionPart.length > Number(TOKEN_DECIMALS)) {
+      throw new Error(
+        `Invalid contract amount: maximum ${TOKEN_DECIMALS} decimal places supported`,
+      );
+    }
+
     const paddedFraction = `${fractionPart}${"0".repeat(Number(TOKEN_DECIMALS))}`.slice(
       0,
       Number(TOKEN_DECIMALS),
     );
 
-    return BigInt(wholePart!) * TOKEN_BASE + BigInt(paddedFraction);
+    try {
+      return BigInt(wholePart) * TOKEN_BASE + BigInt(paddedFraction);
+    } catch {
+      throw new Error("Invalid contract amount: unable to convert to contract units");
+    }
   }
 
   private extractTradeId(

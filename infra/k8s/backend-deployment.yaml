@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: kingfrankhood/amana-backend:latest
+          image: kingfrankhood/amana-backend:1.0.0
           ports:
             - containerPort: 4000
               name: http

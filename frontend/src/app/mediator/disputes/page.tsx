@@ -36,6 +36,7 @@ export default function MediatorDisputesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const mediatorAddresses = useMemo(() => {
     const fromEnv = (process.env.NEXT_PUBLIC_MEDIATOR_WALLETS ?? "")
@@ -102,6 +103,34 @@ export default function MediatorDisputesPage() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
 
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleExport() {
+    if (!token) return;
+
+    setExporting(true);
+    setError(null);
+    try {
+      const blob = await api.disputes.exportCsv(token, {
+        status: activeFilter === "all" ? undefined : activeFilter,
+      });
+      downloadBlob(blob, `disputes-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export disputes");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (!isMediator) {
     return (
       <div className="px-6 py-8 max-w-6xl mx-auto">
@@ -136,6 +165,14 @@ export default function MediatorDisputesPage() {
       {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-text-primary">Mediator Disputes</h1>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting || !token}
+          className="px-3 py-1.5 rounded-md bg-bg-elevated text-text-primary border border-border-default hover:border-border-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {exporting ? "Exporting..." : "Export CSV"}
+        </button>
       </div>
 
       {/* Filters */}

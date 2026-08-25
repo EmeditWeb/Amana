@@ -6,6 +6,8 @@ import { validateRequest } from "../middleware/validateRequest";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../errors/errorCodes";
+import { getMediatorAllowlist } from "../lib/accessControl";
+import { Parser } from "json2csv";
 
 const listDisputesQuerySchema = z.object({
   status: z.enum(["OPEN", "UNDER_REVIEW", "RESOLVED", "CLOSED"]).optional(),
@@ -16,6 +18,29 @@ const listDisputesQuerySchema = z.object({
 const transitionDisputeSchema = z.object({
   status: z.enum(["UNDER_REVIEW", "RESOLVED", "CLOSED"]),
 });
+
+const exportDisputesQuerySchema = z.object({
+  format: z.enum(["csv"]).default("csv"),
+  status: z.enum(["OPEN", "UNDER_REVIEW", "RESOLVED", "CLOSED"]).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+}).refine(
+  (value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to),
+  { message: "from must be before or equal to to", path: ["from"] },
+);
+
+const disputeCsvFields = [
+  "dispute_id",
+  "trade_id",
+  "initiator",
+  "status",
+  "reason",
+  "buyer",
+  "seller",
+  "amount",
+  "created_at",
+  "resolved_at",
+];
 
 export class DisputeController {
   constructor(private disputeService: DisputeService) {}
@@ -85,6 +110,70 @@ export function createDisputeRouter(prisma = defaultPrisma) {
   const router = Router();
   const disputeService = new DisputeService(prisma);
   const disputeController = new DisputeController(disputeService);
+
+  router.get(
+    "/export",
+    authMiddleware,
+    validateRequest({ query: exportDisputesQuerySchema }),
+    async (req: AuthRequest, res: Response, next: NextFunction) => {
+      const callerAddress = req.user?.walletAddress?.trim();
+      if (!callerAddress) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (!getMediatorAllowlist().has(callerAddress)) {
+        return res.status(403).json({ error: "Unauthorized: Not a mediator" });
+      }
+
+      const query = req.query as unknown as z.infer<typeof exportDisputesQuerySchema>;
+      try {
+        const disputes = await prisma.dispute.findMany({
+          where: {
+            ...(query.status ? { status: query.status } : {}),
+            ...(query.from || query.to
+              ? {
+                  createdAt: {
+                    ...(query.from ? { gte: new Date(query.from) } : {}),
+                    ...(query.to ? { lte: new Date(query.to) } : {}),
+                  },
+                }
+              : {}),
+          },
+          include: {
+            trade: {
+              select: {
+                buyerAddress: true,
+                sellerAddress: true,
+                amountUsdc: true,
+              },
+            },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+
+        const rows = disputes.map((dispute) => ({
+          dispute_id: dispute.id,
+          trade_id: dispute.tradeId,
+          initiator: dispute.initiator,
+          status: dispute.status,
+          reason: dispute.reason,
+          buyer: dispute.trade.buyerAddress,
+          seller: dispute.trade.sellerAddress,
+          amount: dispute.trade.amountUsdc,
+          created_at: dispute.createdAt,
+          resolved_at: dispute.resolvedAt,
+        }));
+
+        const parser = new Parser({ fields: disputeCsvFields });
+        const csv = parser.parse(rows);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="disputes-${new Date().toISOString().slice(0, 10)}.csv"`);
+        return res.status(200).send(`\ufeff${csv}`);
+      } catch (error) {
+        return next(error);
+      }
+    },
+  );
 
   router.get(
     "/",

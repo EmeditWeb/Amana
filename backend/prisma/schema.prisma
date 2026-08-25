@@ -277,6 +277,25 @@ model ChainEventOutbox {
   @@index([ledgerSequence])
 }
 
+/// IndexedEvent — pre-normalized on-chain event record for REST/WS query.
+/// Populated by the EventIndexerService; read by the frontend via API.
+model IndexedEvent {
+  id              Int      @id @default(autoincrement())
+  eventId         String   @db.VarChar(255)
+  tradeId         String?  @db.VarChar(255)
+  eventType       String   @db.VarChar(100)
+  ledgerSequence  Int
+  contractId      String   @db.VarChar(255)
+  txHash          String?  @db.VarChar(255)
+  payload         Json
+  ingestedAt      DateTime @default(now())
+
+  @@unique([eventId])
+  @@index([tradeId, eventType, ledgerSequence])
+  @@index([eventType, ledgerSequence])
+  @@index([ledgerSequence])
+}
+
 /// Vault model representing a savings vault on Soroban
 /// - vaultId: Unique identifier from blockchain
 /// - ownerAddress: Wallet address of vault owner (lowercase)
@@ -466,6 +485,21 @@ model TradeNote {
   @@index([tradeId, authorAddress, createdAt])
   @@index([tradeId, createdAt])
   @@index([authorAddress])
+}
+
+/// PlatformFeeEvent records the 1% platform fee deducted on each completed trade.
+/// feeUsdc is stored as a string (e.g. "1.00") to preserve decimal precision.
+/// tradeAmountUsdc is a snapshot of the trade amount at the time the fee was collected.
+model PlatformFeeEvent {
+  id                Int      @id @default(autoincrement())
+  tradeId           String   @unique @db.VarChar(255)
+  tradeAmountUsdc   String   @db.VarChar(100)
+  feeUsdc           String   @db.VarChar(100)
+  collectedAt       DateTime @default(now())
+  ledgerSequence    Int?
+
+  @@index([collectedAt])
+  @@index([tradeId])
 }
 
 /// EscrowReleaseMilestone represents one pre-defined partial release point.

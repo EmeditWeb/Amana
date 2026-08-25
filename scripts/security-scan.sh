@@ -49,6 +49,15 @@ else
   echo "SKIP: trivy not installed (https://aquasecurity.github.io/trivy/)" | tee -a "$REPORT_DIR/summary.txt"
 fi
 
+# Gitleaks secret scan (optional — only if gitleaks is installed; also runs
+# in CI via .github/workflows/secrets-scan.yml on every push/PR)
+if command -v gitleaks &>/dev/null; then
+  run_step "gitleaks secret scan" \
+    sh -c "cd '$REPO_ROOT' && gitleaks dir . --config .gitleaks.toml --no-banner"
+else
+  echo "SKIP: gitleaks not installed (https://github.com/gitleaks/gitleaks)" | tee -a "$REPORT_DIR/summary.txt"
+fi
+
 # Trivy Docker image scan (optional — only if images are built)
 if command -v trivy &>/dev/null && command -v docker &>/dev/null; then
   for image in $(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E '^amana' || true); do

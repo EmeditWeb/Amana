@@ -138,14 +138,49 @@ This provides a second layer of protection at the GitHub API level, independent 
 
 ## 6. Suppressing False Positives
 
-If Gitleaks flags a known safe value (e.g., a test fixture with a fake key), add it to `.gitleaks.toml`:
+Prefer `.gitleaksignore` at the repo root, listing the exact finding
+fingerprint (`<file>:<rule-id>:<line>`) — this is the most reliable
+suppression mechanism, and doesn't require guessing how gitleaks scopes a
+given `[[allowlists]]` block. Regenerate a fingerprint for a new false
+positive with:
 
-```toml
-[[allowlists]]
-description = "Known safe test fixture"
-commits = ["abc1234"]
-# or
-regexes = ["FAKE_KEY_PLACEHOLDER_DO_NOT_USE"]
+```bash
+gitleaks dir . --config .gitleaks.toml --no-banner -r /tmp/report.json
+jq -r '.[].Fingerprint' /tmp/report.json
 ```
 
-Document all suppressions with a comment explaining why they are safe.
+Path-based `[[allowlists]]` blocks in `.gitleaks.toml` (excluding whole
+files/directories, e.g. `docs/`) work as documented — but note that
+`paths` entries are **regexes, not glob patterns**: a bare leading `*`
+(as in a glob like `*.md`) is invalid regex syntax and crashes gitleaks
+entirely rather than just failing to match. Use an anchored, escaped
+equivalent instead (`\.md$`).
+
+Document all suppressions (in `.gitleaksignore` or `.gitleaks.toml`) with a
+comment explaining why they are safe.
+
+---
+
+## 7. Secret Rotation Schedule
+
+Every secret listed in `.env.staging.example`/K8s `secrets.yaml` should be
+rotated on a schedule, not only in response to a leak:
+
+| Secret | Rotation interval |
+|---|---|
+| JWT secret | 90 days |
+| Stellar secret keys | 180 days |
+| Pinata JWT | 30 days |
+| Supabase service role key | 90 days |
+| Redis password | 180 days |
+
+**Status: policy only — not yet automated.** Automating this requires a
+versioned secrets backend (AWS Secrets Manager or HashiCorp Vault) that the
+backend fetches from at startup with a cache TTL and re-fetches on a
+rotation signal, plus an overlapping grace period so an in-flight request
+signed with the old JWT secret isn't rejected mid-rotation. Choosing and
+wiring up that backend is a significant, infrastructure-dependent piece of
+work on its own — deliberately not attempted as part of the gitleaks CI fix
+above. Until it exists, rotate these manually by following the incident
+rotation steps in section 3, on the schedule above rather than only after a
+leak.

@@ -103,6 +103,8 @@ export async function request<T>(
   } = options;
 
   const authToken = token ?? (!skipAuth ? getStoredToken() : null);
+  const isFormData =
+    typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
   const controller = new AbortController();
   let timedOut = false;
   const timeout =
@@ -123,11 +125,7 @@ export async function request<T>(
   try {
     const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
       ...fetchOptions,
-      headers: createHeaders(
-        headers,
-        authToken,
-        fetchOptions.body instanceof FormData,
-      ),
+      headers: createHeaders(headers, authToken, isFormData),
       signal: controller.signal,
     });
 

@@ -7,6 +7,7 @@ import { tracingMiddleware } from './middleware/tracing.middleware';
 import loggerMiddleware from './middleware/logger';
 import { requestLoggerMiddleware } from "./middleware/request.logger.middleware";
 import securityHeaders from "./middleware/securityHeaders";
+import { apiVersionHeader, deprecationHeaders } from "./middleware/apiVersion.middleware";
 import { authRoutes } from "./routes/auth.routes";
 import { walletRoutes } from "./routes/wallet.routes";
 import { createTradeRouter } from "./routes/trade.routes";
@@ -27,9 +28,11 @@ import { createHealthDetailRouter } from "./routes/health.detail.routes";
 import { createNotificationPreferencesRouter } from "./routes/notifications.preferences.routes";
 import { createNotificationsRouter } from "./routes/notifications.inapp.routes";
 import { createMetricsRouter } from "./routes/metrics.routes";
+import { createCspRouter } from "./routes/csp.routes";
 import { disputeRoutes } from "./routes/dispute.routes";
 import { disputeCategoryRoutes } from "./routes/disputeCategory.routes";
 import { createTreasuryRouter } from "./routes/treasury.routes";
+import { createFeeAccountingRouter } from "./routes/fees.routes";
 import userRoutes from "./routes/user.routes";
 import reputationRoutes from "./routes/reputation.routes";
 import { stellarFeesRoutes } from "./routes/stellar.fees";
@@ -42,6 +45,10 @@ import { createAdminFeaturesRouter } from "./routes/admin.features.routes";
 import { createAdminEvidenceVerificationRouter } from "./routes/admin.evidence-verification.routes";
 import { createTrustScoreRouter } from "./routes/trust-score.routes";
 import { webhooksRoutes } from "./routes/webhooks.routes";
+import { createEventRouter } from "./routes/events.routes";
+import { createTradeEventsRouter } from "./routes/trade.events.routes";
+import { PrismaClient } from "@prisma/client";
+import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
 import { csrfProtection } from "./middleware/csrf.middleware";
@@ -62,7 +69,13 @@ function buildCorsOptions(): cors.CorsOptions {
     .filter(Boolean);
 
   if (allowlist.length === 0) {
-    // No allowlist configured — permissive (development only)
+    const nodeEnv = process.env.NODE_ENV ?? "development";
+    if (nodeEnv !== "development" && nodeEnv !== "test") {
+      throw new Error(
+        "CORS_ORIGINS must be configured outside development/test; refusing permissive CORS",
+      );
+    }
+
     return { origin: true, credentials: true };
   }
 
@@ -77,7 +90,9 @@ function buildCorsOptions(): cors.CorsOptions {
   };
 }
 
-export function createApp(): express.Application {
+export function createApp(
+  deps?: { prisma?: PrismaClient; eventIndexer?: EventIndexerService }
+): express.Application {
   const app = express();
 
   if (env.TRUST_PROXY) {
@@ -92,13 +107,19 @@ export function createApp(): express.Application {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
-          imgSrc: ["'self'", "data:"],
-          connectSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https://ipfs.io", "https://*.pinata.cloud"],
+          connectSrc: [
+            "'self'",
+            "https://api.stellar.org",
+            "https://horizon.stellar.org",
+            "https://horizon-testnet.stellar.org",
+          ],
           frameSrc: ["'none'"],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
+          reportUri: ["/api/v1/csp-violation"],
         },
       },
       crossOriginEmbedderPolicy: true,
@@ -139,78 +160,81 @@ export function createApp(): express.Application {
   // Structured per-request logger: method, path, status, durationMs, correlationId, userId, userAgent, ip
   app.use(requestLoggerMiddleware);
 
-  // CSRF protection: validates Origin/Referer on state-changing requests.
-  // Gated behind the CSRF_PROTECTION feature flag — enable via admin feature
-  // flag API (/admin/features/CSRF_PROTECTION).  Runs before all route
-  // handlers so no state-changing endpoint is inadvertently unprotected.
-  // See: backend/src/middleware/csrf.middleware.ts for the full policy doc.
-  app.use(csrfProtection());
-
-  // Enhanced health check with deep introspection
+  // Enhanced health check with deep introspection — not versioned (operational endpoint)
   app.use("/health", createHealthRouter());
   app.use("/health", createHealthDetailRouter());
 
-  // Prometheus metrics endpoint
+  // Prometheus metrics endpoint — not versioned (operational endpoint)
   app.use(createMetricsRouter());
 
-  app.use("/auth", authRoutes);
-  app.use("/wallet", walletRoutes);
-  app.use("/users", userRoutes);
-  app.use("/users", reputationRoutes);
-  app.use("/users", createTrustScoreRouter());
-  app.use(createNotificationPreferencesRouter());
-  app.use(createNotificationsRouter());
+  // CSP violation report collection endpoint (helmet's reportUri above)
+  app.use(createCspRouter());
 
-  // These literal routes must precede the generic /trades/:id handler.
-  app.use("/trades", createTradeExportRouter());
-  app.use("/trades", createTradeTemplateRouter());
-  app.use("/trades", createTradeWatchlistRouter());
-  app.use("/trades", createTradeEvidenceRouter());
-  app.use("/trades", createEscrowReleaseRouter());
-  app.use("/trades", createEscrowScheduleRouter());
-  app.use("/trades", createTradeRouter());
+  // ── Build the versioned resource router (all API routes) ──────────────────
+  // This single router instance is mounted twice:
+  //   1. /api/v1  — canonical, gets X-API-Version: 1
+  //   2. /        — legacy unprefixed paths, gets Deprecation/Sunset headers
+  // Operational endpoints (/health, /metrics-info) are intentionally excluded.
+  function buildApiRouter(): express.Router {
+    const r = express.Router();
 
-  // Notes: POST /trades/:id/notes and GET /trades/:id/notes
-  app.use("/trades", createTradeNotesRouter());
+    r.use("/auth", authRoutes);
+    r.use("/wallet", walletRoutes);
+    r.use("/users", userRoutes);
+    r.use("/users", reputationRoutes);
+    r.use("/users", createTrustScoreRouter());
+    r.use(createNotificationPreferencesRouter());
+    r.use(createNotificationsRouter());
 
-  // Manifest: POST /trades/:id/manifest
-  app.use("/trades/:id/manifest", createTradeManifestRouter());
-  app.use("/trades/:id/manifest", createManifestRouter());
+    // These literal routes must precede the generic /trades/:id handler.
+    r.use("/trades", createTradeExportRouter());
+    r.use("/trades", createTradeTemplateRouter());
+    r.use("/trades", createTradeWatchlistRouter());
+    r.use("/trades", createTradeEvidenceRouter());
+    r.use("/trades", createEscrowReleaseRouter());
+    r.use("/trades", createEscrowScheduleRouter());
+    r.use("/trades", createTradeRouter());
+    r.use("/trades", createTradeNotesRouter());
+    r.use(createTradeEventsRouter());
+    r.use("/trades/:id/manifest", createTradeManifestRouter());
+    r.use("/trades/:id/manifest", createManifestRouter());
+    r.use(createEvidenceRouter());
+    r.use("/trades", createAuditTrailRouter());
 
-  // Evidence: GET /trades/:id/evidence and GET /evidence/:cid/stream
-  app.use(createEvidenceRouter());
+    r.use("/goals", createGoalsRouter());
+    r.use("/disputes", disputeRoutes);
+    r.use("/dispute-categories", disputeCategoryRoutes);
 
-  // Audit trail: GET /trades/:id/history
-  app.use("/trades", createAuditTrailRouter());
+    r.use("/stellar/fees", stellarFeesRoutes);
+    r.use("/stellar/tx", stellarTxStatusRoutes);
+    r.use("/stellar/assets", stellarAssetRoutes);
+    r.use("/stellar/account", stellarAccountCreateRoutes);
+    r.use("/stellar/account", stellarAccountBalanceRoutes);
+    r.use("/contract", createContractStateRouter());
 
-  // Goals analytics: GET /goals
-  app.use("/goals", createGoalsRouter());
+    r.use("/treasury", createTreasuryRouter());
+    r.use(createAdminFeaturesRouter());
+    r.use(createAdminEvidenceVerificationRouter());
+    r.use("/webhooks", webhooksRoutes);
 
-  // Disputes: GET /disputes
-  app.use("/disputes", disputeRoutes);
+    return r;
+  }
 
-  // Dispute categories: CRUD /dispute-categories
-  app.use("/dispute-categories", disputeCategoryRoutes);
+  const apiRouter = buildApiRouter();
 
-  // Stellar network endpoints
-  app.use("/stellar/fees", stellarFeesRoutes);
-  app.use("/stellar/tx", stellarTxStatusRoutes);
-  app.use("/stellar/assets", stellarAssetRoutes);
-  app.use("/stellar/account", stellarAccountCreateRoutes);
-  app.use("/stellar/account", stellarAccountBalanceRoutes);
-  app.use("/contract", createContractStateRouter());
+  // Versioned mount — canonical path, advertises version
+  app.use("/api/v1", apiVersionHeader(1), apiRouter);
 
-  // Treasury management
-  app.use("/treasury", createTreasuryRouter());
+  // Legacy mount — same router, marked deprecated
+  app.use("/", deprecationHeaders(env.LEGACY_API_SUNSET_DATE, "/api/v1"), apiRouter);
 
-  // Feature flags (admin-managed)
-  app.use(createAdminFeaturesRouter());
+  // Event indexer API — requires Prisma and EventIndexerService
+  if (deps?.prisma && deps?.eventIndexer) {
+    app.use("/api/v1", createEventRouter(deps.prisma, deps.eventIndexer));
+  }
 
-  // Evidence pin verification (admin-managed)
-  app.use(createAdminEvidenceVerificationRouter());
-
-  // Webhooks: CRUD /webhooks
-  app.use("/webhooks", webhooksRoutes);
+  // Platform fee accounting & reporting (admin-only)
+  app.use("/fees", createFeeAccountingRouter());
 
   // Error handler registered last — Express 5 natively preserves middleware
   // order so it catches errors from all routes and middleware registered above.

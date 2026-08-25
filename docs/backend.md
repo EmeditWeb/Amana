@@ -185,3 +185,113 @@ Mutation endpoints support idempotency via the `Idempotency-Key` header.
 
 - `MANIFEST_PII_RETENTION_DAYS`: seller raw manifest PII retention window (default `30`)
 - `EVIDENCE_METADATA_RETENTION_DAYS`: evidence metadata retention window (default `90`)
+
+## 13. PostgreSQL Connection Pool Tuning
+
+### Problem
+
+PostgreSQL has a hard connection limit (default 100). Prisma's default pool size is `num_physical_cpus * 2 + 1`, which with 4-8 replicas × 20 connections each can exhaust the database. No tuning has been done for the target load of 1000+ concurrent trades.
+
+### Connection String Tuning
+
+The connection string includes pool tuning parameters:
+
+```
+postgresql://user:pass@host:5432/db?connection_limit=15&pool_timeout=10
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `connection_limit` | 15 | Max connections per Prisma client instance |
+| `pool_timeout` | 10 | Seconds a query waits for a connection before timing out |
+
+### PgBouncer (Transaction Mode)
+
+PgBouncer is configured in the Docker Compose staging profile (`docker-compose.yml`, profile `staging`) in **transaction mode**. Transaction mode is the recommended setting for Prisma/PostgreSQL because it reuses connections across transactions, dramatically reducing the number of backend processes consumed.
+
+PgBouncer configuration (from `docker-compose.yml`):
+
+| Parameter | Value | Description |
+|---|---|---|
+| `pool_mode` | `transaction` | Reuse connections across transactions |
+| `max_client_conn` | 100 | Max client connections to PgBouncer |
+| `default_pool_size` | 15 | Max server connections per database |
+| `reserve_pool_size` | 5 | Extra connections for burst traffic |
+| `reserve_pool_timeout` | 10 | Seconds to wait for reserve pool |
+| `server_idle_timeout` | 600 | Close idle server connections after 10 min |
+| `server_lifetime` | 3600 | Recycle server connections after 1 hour |
+
+### Connection Pool Metrics
+
+The following Prometheus metrics are exposed per instance:
+
+| Metric | Type | Description |
+|---|---|---|
+| `pg_pool_active_connections` | Gauge | Active connections currently in use |
+| `pg_pool_idle_connections` | Gauge | Idle connections available in the pool |
+| `pg_pool_waiting_queries` | Gauge | Queries waiting for a connection |
+| `pg_pool_timeout_total` | Counter | Connections that timed out waiting for a pool connection |
+
+### Query Timeout Enforcement
+
+Prisma middleware records query duration per model and operation. Queries exceeding `DATABASE_CONNECTION_QUERY_TIMEOUT` (default 5000ms) are tracked as potential pool saturation indicators.
+
+### Pool Saturation Alert
+
+An alert fires when `pg_pool_active_connections` exceeds 80% of `max_pool_size` for 5 minutes:
+
+- **Threshold**: `POOL_SATURATION_WARN_THRESHOLD` (default `80` percent)
+- **Duration**: `POOL_SATURATION_WARN_DURATION_MS` (default `300000` ms / 5 min)
+- **Alert type**: `pg_pool_saturation`
+- **Dispatch**: Via `ALERT_WEBHOOK_URL` with HMAC signature (`ALERT_WEBHOOK_SECRET`)
+
+### Benchmarking
+
+Use the k6 load test to benchmark pool saturation:
+
+```bash
+# Run the SELECT 1 endpoint benchmark against the health check
+k6 run k6/load-test.js
+```
+
+The `k6/load-test.js` script includes a `selectOneBenchmark()` function that hits the `/health` endpoint (which runs `SELECT 1`) and tracks pool saturation errors and query duration.
+
+### Tuning Guidance
+
+#### Staging
+
+- `DATABASE_POOL_SIZE=15` — conservative pool size for staging
+- `PGBOUNCER_ENABLED=true` — PgBouncer handles connection multiplexing
+- `PGBOUNCER_POOL_MODE=transaction` — optimal for Prisma's request-per-transaction pattern
+- Monitor `pg_pool_active_connections` and `pg_pool_waiting_queries` to right-size
+
+#### Production
+
+- Calculate `DATABASE_POOL_SIZE` as: `(max_concurrent_requests / num_backend_instances) * 1.2`
+- Ensure `num_backend_instances * DATABASE_POOL_SIZE <= PostgreSQL max_connections - 10` (reserve 10 for superuser/maintenance)
+- Enable PgBouncer in transaction mode
+- Set `reserve_pool_size` to 20% of `default_pool_size` to handle traffic bursts
+- Set `server_idle_timeout` to 600s and `server_lifetime` to 3600s to prevent stale connections
+
+### Supabase Pooler (Alternative)
+
+If using Supabase as the database backend, Supabase provides its own connection pooler. Configure the connection string with Supabase's pooler URL and set `PGBOUNCER_ENABLED=false`. See Supabase dashboard for pooler settings.
+
+### Environment Variables Reference
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_POOL_SIZE` | `15` | Max connections per Prisma client instance |
+| `DATABASE_POOL_TIMEOUT` | `10` | Seconds a query waits for a connection |
+| `DATABASE_MAX_OVERFLOW` | `5` | Additional connections beyond pool size |
+| `DATABASE_IDLE_INACTIVE_SESSION_TIMEOUT` | `300000` | Close inactive sessions after 5 min |
+| `DATABASE_CONNECTION_QUERY_TIMEOUT` | `5000` | Query timeout in ms |
+| `PGBOUNCER_ENABLED` | `false` | Enable PgBouncer connection pooling |
+| `PGBOUNCER_POOL_MODE` | `transaction` | Pooling mode (transaction/session/statement) |
+| `PGBOUNCER_DEFAULT_POOL_SIZE` | `15` | Max server connections per database |
+| `PGBOUNCER_RESERVE_POOL_SIZE` | `5` | Extra connections for burst traffic |
+| `PGBOUNCER_RESERVE_POOL_TIMEOUT` | `10` | Seconds to wait for reserve pool |
+| `PGBOUNCER_SERVER_IDLE_TIMEOUT` | `600` | Close idle server connections after 10 min |
+| `PGBOUNCER_SERVER_LIFETIME` | `3600` | Recycle server connections after 1 hour |
+| `POOL_SATURATION_WARN_THRESHOLD` | `80` | Percent of pool that triggers saturation warning |
+| `POOL_SATURATION_WARN_DURATION_MS` | `300000` | Duration threshold for saturation alert (ms) |

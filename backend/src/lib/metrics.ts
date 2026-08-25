@@ -1,4 +1,4 @@
-import { Counter, Histogram, metrics } from "@opentelemetry/api";
+import { Counter, Gauge, Histogram, metrics } from "@opentelemetry/api";
 
 const METER_NAME = "amana-backend";
 
@@ -30,9 +30,20 @@ export interface StellarMetricsRecorder {
   ): void;
 }
 
+export interface PoolMetrics {
+  activeConnections: number;
+  idleConnections: number;
+  waitingQueries: number;
+  timeoutTotal: number;
+}
+
 let submissionCounter: Counter | undefined;
 let submissionDuration: Histogram | undefined;
 let rpcDuration: Histogram | undefined;
+let pgPoolActiveConnections: Gauge | undefined;
+let pgPoolIdleConnections: Gauge | undefined;
+let pgPoolWaitingQueries: Gauge | undefined;
+let pgPoolTimeoutTotal: Counter | undefined;
 let customRecorder: StellarMetricsRecorder | null = null;
 
 function getMeter() {
@@ -74,6 +85,58 @@ function getRpcDuration(): Histogram {
   return rpcDuration;
 }
 
+function getPgPoolActiveConnections(): Gauge {
+  if (!pgPoolActiveConnections) {
+    pgPoolActiveConnections = getMeter().createGauge(
+      "pg_pool_active_connections",
+      {
+        description: "Number of active PostgreSQL connections in the pool",
+        unit: "1",
+      },
+    );
+  }
+  return pgPoolActiveConnections;
+}
+
+function getPgPoolIdleConnections(): Gauge {
+  if (!pgPoolIdleConnections) {
+    pgPoolIdleConnections = getMeter().createGauge(
+      "pg_pool_idle_connections",
+      {
+        description: "Number of idle PostgreSQL connections in the pool",
+        unit: "1",
+      },
+    );
+  }
+  return pgPoolIdleConnections;
+}
+
+function getPgPoolWaitingQueries(): Gauge {
+  if (!pgPoolWaitingQueries) {
+    pgPoolWaitingQueries = getMeter().createGauge(
+      "pg_pool_waiting_queries",
+      {
+        description: "Number of queries waiting for a connection from the pool",
+        unit: "1",
+      },
+    );
+  }
+  return pgPoolWaitingQueries;
+}
+
+function getPgPoolTimeoutTotal(): Counter {
+  if (!pgPoolTimeoutTotal) {
+    pgPoolTimeoutTotal = getMeter().createCounter(
+      "pg_pool_timeout_total",
+      {
+        description: "Total number of connections that waited too long for a pool connection",
+        unit: "1",
+      },
+    );
+  }
+  return pgPoolTimeoutTotal;
+}
+
 export function recordTransactionSubmission(
   operation: string,
   outcome: StellarTransactionOutcome,
@@ -100,6 +163,16 @@ export function recordRpcCall(
   }
 
   getRpcDuration().record(durationMs, { rpc_method: rpcMethod, outcome });
+}
+
+export function recordPoolMetrics(metrics: PoolMetrics): void {
+  getPgPoolActiveConnections().record(metrics.activeConnections);
+  getPgPoolIdleConnections().record(metrics.idleConnections);
+  getPgPoolWaitingQueries().record(metrics.waitingQueries);
+}
+
+export function recordPoolTimeout(): void {
+  getPgPoolTimeoutTotal().add(1);
 }
 
 export function classifySubmissionError(error: unknown): StellarTransactionOutcome {
@@ -147,4 +220,8 @@ export function __resetMetricsForTests(): void {
   submissionCounter = undefined;
   submissionDuration = undefined;
   rpcDuration = undefined;
+  pgPoolActiveConnections = undefined;
+  pgPoolIdleConnections = undefined;
+  pgPoolWaitingQueries = undefined;
+  pgPoolTimeoutTotal = undefined;
 }

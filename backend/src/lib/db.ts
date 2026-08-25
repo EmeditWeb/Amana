@@ -3,6 +3,7 @@ import { env } from '../config/env';
 
 // Ensure a single instance of Prisma Client is used across the application
 declare global {
+  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 
@@ -13,27 +14,26 @@ const prismaClientSingleton = () => {
 
   client.$use(async (params: Prisma.MiddlewareParams, next: (params: Prisma.MiddlewareParams) => Promise<unknown>) => {
     const model = String(params.model ?? "");
+
     const data = params.args?.data as Record<string, unknown> | undefined;
 
-    if (!data) {
-      return next(params);
-    }
-
-    if (model === 'User' && typeof data.walletAddress === 'string') {
-      data.walletAddress = data.walletAddress.toLowerCase();
-    }
-
-    if (model === 'Trade') {
-      if (typeof data.buyerAddress === 'string') {
-        data.buyerAddress = data.buyerAddress.toLowerCase();
+    if (data) {
+      if (model === 'User' && typeof data.walletAddress === 'string') {
+        data.walletAddress = data.walletAddress.toLowerCase();
       }
-      if (typeof data.sellerAddress === 'string') {
-        data.sellerAddress = data.sellerAddress.toLowerCase();
-      }
-    }
 
-    if (model === 'Dispute' && typeof data.initiator === 'string') {
-      data.initiator = data.initiator.toLowerCase();
+      if (model === 'Trade') {
+        if (typeof data.buyerAddress === 'string') {
+          data.buyerAddress = data.buyerAddress.toLowerCase();
+        }
+        if (typeof data.sellerAddress === 'string') {
+          data.sellerAddress = data.sellerAddress.toLowerCase();
+        }
+      }
+
+      if (model === 'Dispute' && typeof data.initiator === 'string') {
+        data.initiator = data.initiator.toLowerCase();
+      }
     }
 
     return next(params);

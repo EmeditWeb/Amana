@@ -92,10 +92,10 @@ describe("Toast component", () => {
   });
 
   it.each([
-    ["success", "success"],
-    ["error", "error"],
-    ["warning", "warning"],
-    ["info", "info"],
+    ["success"],
+    ["error"],
+    ["warning"],
+    ["info"],
   ] as const)("renders %s variant", (type) => {
     const { container } = render(
       <Toast id="1" type={type} message="msg" onClose={onClose} />
