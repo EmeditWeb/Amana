@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { Parser } from "json2csv";
 import { prisma as defaultPrisma } from "../lib/db";
 import { appLogger } from "../middleware/logger";
+import { cacheService } from "../lib/cache";
 
 export const FEE_RATE = 0.01; // 1% platform fee
 
@@ -128,30 +129,43 @@ export class FeeAccountingService {
     dateFrom?: Date;
     dateTo?: Date;
   }): Promise<FeeAggregation> {
-    const where: Prisma.PlatformFeeEventWhereInput = {};
-    if (params.dateFrom || params.dateTo) {
-      where.collectedAt = {
-        ...(params.dateFrom ? { gte: params.dateFrom } : {}),
-        ...(params.dateTo ? { lte: params.dateTo } : {}),
+    const dateFrom = params.dateFrom?.toISOString() ?? null;
+    const dateTo = params.dateTo?.toISOString() ?? null;
+    const cacheKey = `fees:aggregate:${dateFrom ?? "start"}:${dateTo ?? "end"}`;
+
+    return cacheService.getOrSet(cacheKey, 60, async () => {
+      const filters: Prisma.Sql[] = [];
+      if (params.dateFrom) {
+        filters.push(Prisma.sql`"collectedAt" >= ${params.dateFrom}`);
+      }
+      if (params.dateTo) {
+        filters.push(Prisma.sql`"collectedAt" <= ${params.dateTo}`);
+      }
+
+      const where =
+        filters.length > 0
+          ? Prisma.sql`WHERE ${Prisma.join(filters, " AND ")}`
+          : Prisma.empty;
+
+      const rows = await this.db.$queryRaw<
+        Array<{ totalFeesUsdc: string | null; totalTrades: number | bigint }>
+      >(Prisma.sql`
+        SELECT
+          COALESCE(SUM(CAST("feeUsdc" AS DECIMAL)), 0)::text AS "totalFeesUsdc",
+          COUNT(*)::int AS "totalTrades"
+        FROM "PlatformFeeEvent"
+        ${where}
+      `);
+      const aggregate = rows[0];
+      const total = Number.parseFloat(aggregate?.totalFeesUsdc ?? "0");
+
+      return {
+        totalFeesUsdc: Number.isFinite(total) ? total.toFixed(6) : "0.000000",
+        totalTrades: Number(aggregate?.totalTrades ?? 0),
+        dateFrom,
+        dateTo,
       };
-    }
-
-    const records = await this.db.platformFeeEvent.findMany({
-      where,
-      select: { feeUsdc: true },
     });
-
-    const total = records.reduce((sum, r) => {
-      const v = parseFloat(r.feeUsdc);
-      return sum + (Number.isFinite(v) ? v : 0);
-    }, 0);
-
-    return {
-      totalFeesUsdc: total.toFixed(6),
-      totalTrades: records.length,
-      dateFrom: params.dateFrom?.toISOString() ?? null,
-      dateTo: params.dateTo?.toISOString() ?? null,
-    };
   }
 
   /**

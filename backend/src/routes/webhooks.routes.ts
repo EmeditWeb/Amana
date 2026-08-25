@@ -1,15 +1,84 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { lookup } from 'dns/promises';
+import net from 'net';
 import { prisma } from '../lib/db';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validateRequest';
 
 const router = Router();
 
+function isBlockedHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized.endsWith(".localhost");
+}
+
+function isBlockedIpAddress(address: string): boolean {
+  const ipVersion = net.isIP(address);
+  if (ipVersion === 0) return true;
+
+  if (ipVersion === 4) {
+    const octets = address.split(".").map((part) => Number(part));
+    const [first = 0, second = 0] = octets;
+    return (
+      first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      (first === 100 && second >= 64 && second <= 127) ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168) ||
+      (first === 198 && (second === 18 || second === 19)) ||
+      first >= 224
+    );
+  }
+
+  const normalized = address.toLowerCase();
+  return (
+    normalized === "::1" ||
+    normalized === "::" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe80:") ||
+    normalized.startsWith("::ffff:127.") ||
+    normalized.startsWith("::ffff:10.") ||
+    normalized.startsWith("::ffff:169.254.") ||
+    normalized.startsWith("::ffff:192.168.")
+  );
+}
+
+async function validateWebhookUrl(url: string): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+  if (parsed.username || parsed.password) return false;
+  if (isBlockedHostname(parsed.hostname)) return false;
+
+  const literalIp = net.isIP(parsed.hostname);
+  if (literalIp !== 0) {
+    return !isBlockedIpAddress(parsed.hostname);
+  }
+
+  try {
+    const addresses = await lookup(parsed.hostname, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every((entry) => !isBlockedIpAddress(entry.address));
+  } catch {
+    return false;
+  }
+}
+
 // Zod schemas for validation
 const createWebhookSchema = z.object({
-  url: z.string().url('Invalid URL format'),
+  url: z.string().url('Invalid URL format').refine(
+    validateWebhookUrl,
+    'Webhook URL must be publicly accessible and cannot resolve to internal services',
+  ),
   events: z.array(z.string()).min(1, 'At least one event is required'),
   secret: z.string().optional(),
 });

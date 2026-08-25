@@ -68,7 +68,13 @@ function buildCorsOptions(): cors.CorsOptions {
     .filter(Boolean);
 
   if (allowlist.length === 0) {
-    // No allowlist configured — permissive (development only)
+    const nodeEnv = process.env.NODE_ENV ?? "development";
+    if (nodeEnv !== "development" && nodeEnv !== "test") {
+      throw new Error(
+        "CORS_ORIGINS must be configured outside development/test; refusing permissive CORS",
+      );
+    }
+
     return { origin: true, credentials: true };
   }
 
