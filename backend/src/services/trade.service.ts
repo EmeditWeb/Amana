@@ -41,6 +41,8 @@ export interface CreatePendingTradeInput {
   amountUsdc: string;
   buyerLossBps: number;
   sellerLossBps: number;
+  /** Client-supplied Idempotency-Key header value, if present. */
+  idempotencyKey?: string;
 }
 
 export type TradeListFilters = {
@@ -110,12 +112,31 @@ export class TradeService {
           userId: sanitizeLogField(input.buyerAddress)
         });
 
-        return this.prisma.trade.create({
-          data: {
-            ...input,
-            status: TradeStatus.PENDING_SIGNATURE,
-          },
-        });
+        try {
+          return await this.prisma.trade.create({
+            data: {
+              ...input,
+              status: TradeStatus.PENDING_SIGNATURE,
+            },
+          });
+        } catch (error) {
+          if (
+            input.idempotencyKey &&
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            // A retry with the same Idempotency-Key raced or followed a prior
+            // create — return the trade that already exists for that key
+            // instead of creating a duplicate.
+            const existing = await this.prisma.trade.findUnique({
+              where: { idempotencyKey: input.idempotencyKey },
+            });
+            if (existing) {
+              return existing;
+            }
+          }
+          throw error;
+        }
       },
       { attributes: { "trade.id": sanitizeLogField(input.tradeId), "trade.status": TradeStatus.PENDING_SIGNATURE } },
     );

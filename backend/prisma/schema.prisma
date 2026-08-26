@@ -81,6 +81,10 @@ model User {
 model Trade {
   id            Int         @id @default(autoincrement())
   tradeId       String      @unique @db.VarChar(255)
+  /// Client-supplied idempotency key (from the Idempotency-Key header). Unique
+  /// so a client retry that generates a fresh tradeId cannot create a second
+  /// row for the same logical creation request.
+  idempotencyKey String?    @unique @db.VarChar(255)
   buyerAddress  String      @db.VarChar(255)
   sellerAddress String      @db.VarChar(255)
   amountUsdc    String      @default("0") @db.VarChar(100)
