@@ -6,6 +6,7 @@ import { BentoCard } from "./BentoCard";
 import { Icon } from "./Icon";
 import { apiConfig } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "@/hooks/useTranslation";
 
 export interface VideoUploadCardProps {
   tradeId: string;
@@ -13,6 +14,7 @@ export interface VideoUploadCardProps {
 }
 
 export function VideoUploadCard({ tradeId, onUpload }: VideoUploadCardProps) {
+  const { t } = useTranslation();
   const { token } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -114,7 +116,7 @@ export function VideoUploadCard({ tradeId, onUpload }: VideoUploadCardProps) {
           <>
             <Video className="w-8 h-8 text-text-muted" />
             <p className="text-text-muted text-sm text-center">
-              Upload delivery proof video for verification
+              {t("videoUpload.deliveryProof")}
             </p>
             <span className="text-xs text-text-muted">
               Drag &amp; drop or click to browse
