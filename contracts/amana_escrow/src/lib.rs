@@ -142,6 +142,10 @@ pub struct EvidenceSubmittedEvent {
     /// IPFS CID of the submitted evidence (was always emitted as empty `Bytes`; now
     /// carries the actual CID supplied by the caller so off-chain indexers can use it).
     pub evidence_hash: String,
+    /// Legacy `Bytes` representation of the IPFS hash, kept for consumers of the
+    /// original event shape. Distinct field from `evidence_hash` so neither value
+    /// is lost when the event is published.
+    pub legacy_hash: Bytes,
 }
 
 /// Emitted when a buyer or seller formally initiates a dispute.
@@ -952,27 +956,29 @@ impl EscrowContract {
                     .instance()
                     .get(&DataKey::AccruedFees)
                     .unwrap_or(0);
-                if *amount > 0 && *amount <= accrued_fees {
-                    let token: Address = env
-                        .storage()
-                        .instance()
-                        .get(&DataKey::CngnContract)
-                        .expect("Not initialized");
-                    let token_client = token::Client::new(env, &token);
-                    token_client.transfer(
-                        &env.current_contract_address(),
-                        destination,
-                        amount,
-                    );
-                    env.storage()
-                        .instance()
-                        .set(&DataKey::AccruedFees, &(accrued_fees - amount));
-                    FeesWithdrawnEvent {
-                        amount: *amount,
-                        destination: destination.clone(),
-                    }
-                    .publish(env);
+                assert!(
+                    *amount > 0 && *amount <= accrued_fees,
+                    "invalid fee withdrawal amount: must be > 0 and <= accrued fees"
+                );
+                let token: Address = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::CngnContract)
+                    .expect("Not initialized");
+                let token_client = token::Client::new(env, &token);
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    destination,
+                    amount,
+                );
+                env.storage()
+                    .instance()
+                    .set(&DataKey::AccruedFees, &(accrued_fees - amount));
+                FeesWithdrawnEvent {
+                    amount: *amount,
+                    destination: destination.clone(),
                 }
+                .publish(env);
             }
         }
     }
@@ -1169,9 +1175,16 @@ impl EscrowContract {
             .instance()
             .get(&NEXT_TRADE_ID)
             .unwrap_or(1_u64);
+        assert!(
+            next_id <= u32::MAX as u64,
+            "trade id space exhausted: next_id exceeds u32::MAX"
+        );
         let ledger_seq = env.ledger().sequence() as u64;
         let trade_id = (ledger_seq << 32) | next_id;
-        env.storage().instance().set(&NEXT_TRADE_ID, &(next_id + 1));
+        let next_id_incremented = next_id
+            .checked_add(1)
+            .expect("trade id counter overflow");
+        env.storage().instance().set(&NEXT_TRADE_ID, &next_id_incremented);
         let total_trades: u64 = env
             .storage()
             .instance()
@@ -2095,8 +2108,8 @@ impl EscrowContract {
         EvidenceSubmittedEvent {
             trade_id,
             submitter: caller,
-            evidence_hash: evidence_hash_bytes,
             evidence_hash: ipfs_hash,
+            legacy_hash: evidence_hash_bytes,
         }
         .publish(&env);
 
