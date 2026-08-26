@@ -48,7 +48,11 @@ export class TreasuryService {
       "Treasury withdrawal requested",
     );
 
-    return { unsignedXdr: "" };
+    throw new AppError(
+      ErrorCode.NOT_FOUND,
+      "Treasury withdrawal is not yet implemented. This endpoint is a stub.",
+      501,
+    );
   }
 
   getConfig(): {

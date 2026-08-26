@@ -1,10 +1,11 @@
 /**
- * Tests for the shared access-control helpers (Issue #525)
+ * Tests for the shared access-control helpers (Issue #525, #1017)
  *
  * Validates that getMediatorAllowlist and isMediatorAddress correctly parse
  * ADMIN_STELLAR_PUBKEYS and enforce mediator/arbitrator route guards.
+ * Addresses are normalized to lowercase for consistent comparison.
  */
-import { getMediatorAllowlist, isMediatorAddress } from "../lib/accessControl";
+import { getMediatorAllowlist, isMediatorAddress, normalizeAddress } from "../lib/accessControl";
 
 const ADDR_A = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 const ADDR_B = "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
@@ -25,27 +26,27 @@ describe("getMediatorAllowlist", () => {
     expect(getMediatorAllowlist().size).toBe(0);
   });
 
-  it("returns a set with one address for a single entry", () => {
+  it("returns a set with one address for a single entry (normalized lowercase)", () => {
     process.env.ADMIN_STELLAR_PUBKEYS = ADDR_A;
     const allowlist = getMediatorAllowlist();
     expect(allowlist.size).toBe(1);
-    expect(allowlist.has(ADDR_A)).toBe(true);
+    expect(allowlist.has(ADDR_A.toLowerCase())).toBe(true);
   });
 
-  it("returns all addresses for a comma-separated list", () => {
+  it("returns all addresses for a comma-separated list (normalized lowercase)", () => {
     process.env.ADMIN_STELLAR_PUBKEYS = `${ADDR_A},${ADDR_B},${ADDR_C}`;
     const allowlist = getMediatorAllowlist();
     expect(allowlist.size).toBe(3);
-    expect(allowlist.has(ADDR_A)).toBe(true);
-    expect(allowlist.has(ADDR_B)).toBe(true);
-    expect(allowlist.has(ADDR_C)).toBe(true);
+    expect(allowlist.has(ADDR_A.toLowerCase())).toBe(true);
+    expect(allowlist.has(ADDR_B.toLowerCase())).toBe(true);
+    expect(allowlist.has(ADDR_C.toLowerCase())).toBe(true);
   });
 
-  it("trims whitespace around addresses", () => {
+  it("trims whitespace and normalizes to lowercase", () => {
     process.env.ADMIN_STELLAR_PUBKEYS = `  ${ADDR_A}  ,  ${ADDR_B}  `;
     const allowlist = getMediatorAllowlist();
-    expect(allowlist.has(ADDR_A)).toBe(true);
-    expect(allowlist.has(ADDR_B)).toBe(true);
+    expect(allowlist.has(ADDR_A.toLowerCase())).toBe(true);
+    expect(allowlist.has(ADDR_B.toLowerCase())).toBe(true);
   });
 
   it("ignores empty entries produced by trailing commas", () => {
@@ -59,6 +60,20 @@ describe("getMediatorAllowlist", () => {
     const first = getMediatorAllowlist();
     const second = getMediatorAllowlist();
     expect(first).not.toBe(second);
+  });
+});
+
+describe("normalizeAddress", () => {
+  it("lowercases addresses", () => {
+    expect(normalizeAddress("GABC123")).toBe("gabc123");
+  });
+
+  it("trims whitespace", () => {
+    expect(normalizeAddress("  GABC123  ")).toBe("gabc123");
+  });
+
+  it("handles mixed case and whitespace", () => {
+    expect(normalizeAddress("  GaBc123  ")).toBe("gabc123");
   });
 });
 
@@ -83,9 +98,15 @@ describe("isMediatorAddress", () => {
     expect(isMediatorAddress(ADDR_B)).toBe(false);
   });
 
-  it("is case-sensitive — uppercase and lowercase do not match", () => {
+  it("is case-insensitive — uppercase and lowercase match after normalization", () => {
     process.env.ADMIN_STELLAR_PUBKEYS = ADDR_A;
-    expect(isMediatorAddress(ADDR_A.toLowerCase())).toBe(false);
+    expect(isMediatorAddress(ADDR_A.toLowerCase())).toBe(true);
+    expect(isMediatorAddress(ADDR_A.toUpperCase())).toBe(true);
+  });
+
+  it("normalizes addresses with leading/trailing whitespace", () => {
+    process.env.ADMIN_STELLAR_PUBKEYS = ADDR_A;
+    expect(isMediatorAddress(`  ${ADDR_A}  `)).toBe(true);
   });
 
   it("returns false for an empty-string address", () => {

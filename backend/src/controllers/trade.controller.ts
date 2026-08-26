@@ -44,7 +44,8 @@ export function isBuyerOrAdmin(
   caller: string,
   admins: Set<string> = parseAdminPubkeys(),
 ): boolean {
-  return tradeBuyer === caller || admins.has(caller);
+  const normalizedCaller = caller.trim().toLowerCase();
+  return tradeBuyer.toLowerCase() === normalizedCaller || admins.has(normalizedCaller);
 }
 
 export class TradeController {

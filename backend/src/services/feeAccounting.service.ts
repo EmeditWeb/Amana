@@ -5,6 +5,7 @@ import { appLogger } from "../middleware/logger";
 import { cacheService } from "../lib/cache";
 
 export const FEE_RATE = 0.01; // 1% platform fee
+export const CSV_EXPORT_MAX_ROWS = 100_000;
 
 export interface FeeEventRecord {
   id: number;
@@ -169,9 +170,20 @@ export class FeeAccountingService {
   }
 
   /**
-   * Export all fee events in the date range as a CSV string.
+   * Export fee events in the date range as a CSV string.
+   * Uses cursor-based pagination to avoid loading all records into memory at once.
+   * Enforces a maximum row limit to prevent OOM on large datasets.
    */
-  async exportCsv(params: { dateFrom?: Date; dateTo?: Date }): Promise<string> {
+  async exportCsv(params: {
+    dateFrom?: Date;
+    dateTo?: Date;
+    maxRows?: number;
+  }): Promise<{ csv: string; totalExported: number; truncated: boolean }> {
+    const maxRows = Math.min(
+      params.maxRows ?? CSV_EXPORT_MAX_ROWS,
+      CSV_EXPORT_MAX_ROWS,
+    );
+
     const where: Prisma.PlatformFeeEventWhereInput = {};
     if (params.dateFrom || params.dateTo) {
       where.collectedAt = {
@@ -179,20 +191,6 @@ export class FeeAccountingService {
         ...(params.dateTo ? { lte: params.dateTo } : {}),
       };
     }
-
-    const records = await this.db.platformFeeEvent.findMany({
-      where,
-      orderBy: [{ collectedAt: "desc" }, { id: "desc" }],
-    });
-
-    const rows = records.map((r) => ({
-      id: r.id,
-      tradeId: r.tradeId,
-      tradeAmountUsdc: r.tradeAmountUsdc,
-      feeUsdc: r.feeUsdc,
-      collectedAt: r.collectedAt.toISOString(),
-      ledgerSequence: r.ledgerSequence ?? "",
-    }));
 
     const parser = new Parser({
       fields: [
@@ -205,7 +203,53 @@ export class FeeAccountingService {
       ],
     });
 
-    return parser.parse(rows);
+    const BATCH_SIZE = 1000;
+    let lastId = 0;
+    let totalExported = 0;
+    let truncated = false;
+    const rows: Array<Record<string, unknown>> = [];
+
+    while (totalExported < maxRows) {
+      const remaining = maxRows - totalExported;
+      const take = Math.min(BATCH_SIZE, remaining);
+
+      const batch = await this.db.platformFeeEvent.findMany({
+        where: {
+          ...where,
+          id: { gt: lastId },
+        },
+        orderBy: [{ id: "asc" }],
+        take,
+      });
+
+      if (batch.length === 0) break;
+
+      for (const r of batch) {
+        if (totalExported >= maxRows) {
+          truncated = true;
+          break;
+        }
+        rows.push({
+          id: r.id,
+          tradeId: r.tradeId,
+          tradeAmountUsdc: r.tradeAmountUsdc,
+          feeUsdc: r.feeUsdc,
+          collectedAt: r.collectedAt.toISOString(),
+          ledgerSequence: r.ledgerSequence ?? "",
+        });
+        totalExported++;
+      }
+
+      lastId = batch[batch.length - 1].id;
+
+      if (batch.length < take) break;
+    }
+
+    return {
+      csv: parser.parse(rows),
+      totalExported,
+      truncated,
+    };
   }
 }
 
