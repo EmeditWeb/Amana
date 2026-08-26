@@ -22,6 +22,14 @@ export function t(
   key: string,
   params?: Record<string, string | number>,
 ): string {
+  if (typeof dict[key] === "string") {
+    const value = dict[key];
+    if (!params) return value;
+    return value.replace(/\{(\w+)\}/g, (_: string, name: string) =>
+      params[name] !== undefined ? String(params[name]) : `{${name}}`,
+    );
+  }
+
   const parts = key.split(".");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let value: any = dict;

@@ -80,6 +80,11 @@ const fr: Record<string, string> = {
   "dashboard.recentTrades.emptyDescription":
     "Vous n\u2019avez pas encore initi\u00e9 ou re\u00e7u d\u2019\u00e9changes. Cr\u00e9ez votre premier \u00e9change pour commencer.",
   "dashboard.recentTrades.startTrading": "Commencer \u00e0 \u00e9changer",
+  "trades.details.title": "D\u00e9tails de l\u2019\u00e9change",
+  "trades.details.created": "Cr\u00e9\u00e9 : {date}",
+  "trades.details.updated": "Mis \u00e0 jour : {date}",
+  "vault.overview.title": "Aper\u00e7u du coffre-fort",
+  "videoUpload.deliveryProof": "T\u00e9l\u00e9charger une vid\u00e9o de preuve de livraison pour v\u00e9rification",
   "dashboard.recentTrades.table.tradeId": "ID \u00e9change",
   "dashboard.recentTrades.table.counterparty": "Contrepartie",
   "dashboard.recentTrades.table.amount": "Montant",

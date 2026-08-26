@@ -7,11 +7,12 @@ import { signTransaction } from "@stellar/freighter-api";
 import { useAuth } from "@/hooks/useAuth";
 import { useTradeDetail } from "@/hooks/useTradeDetail";
 import { useWallet } from "@/hooks/useWallet";
+import { useTranslation } from "@/hooks/useTranslation";
 import { ApiError } from "@/lib/api";
 import { apiConfig } from "@/lib/api";
 
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleString("en-US", {
+function formatDate(dateString: string, locale: string) {
+  return new Date(dateString).toLocaleString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -86,6 +87,7 @@ function deriveRole(
 }
 
 export default function TradeDetailPage() {
+  const { t, locale } = useTranslation();
   const params = useParams<{ id: string }>();
   const tradeId = params?.id ?? "UNKNOWN";
 
@@ -166,7 +168,7 @@ export default function TradeDetailPage() {
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary">Trade Details</h1>
+        <h1 className="text-2xl font-semibold text-text-primary">{t("trades.details.title")}</h1>
         <Link
           href="/trades"
           className="px-3 py-1.5 rounded-md border border-border-default hover:border-border-hover text-text-secondary hover:text-text-primary transition-colors"
@@ -206,8 +208,8 @@ export default function TradeDetailPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-text-muted">Trade ID</p>
                 <p className="mt-2 text-xl font-semibold text-text-primary font-mono">{trade.tradeId}</p>
-                <p className="mt-2 text-xs text-text-muted">Created: {formatDate(trade.createdAt)}</p>
-                <p className="mt-1 text-xs text-text-muted">Updated: {formatDate(trade.updatedAt)}</p>
+                <p className="mt-2 text-xs text-text-muted">{t("trades.details.created", { date: formatDate(trade.createdAt, locale) })}</p>
+                <p className="mt-1 text-xs text-text-muted">{t("trades.details.updated", { date: formatDate(trade.updatedAt, locale) })}</p>
               </div>
               <div className="flex flex-col items-start sm:items-end gap-2">
                 <StatusBadge status={trade.status} />

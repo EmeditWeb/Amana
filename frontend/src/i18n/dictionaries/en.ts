@@ -82,6 +82,11 @@ const en = {
   "dashboard.recentTrades.emptyDescription":
     "You haven\u2019t initiated or received any trades yet. Create your first trade to get started.",
   "dashboard.recentTrades.startTrading": "Start Trading",
+  "trades.details.title": "Trade Details",
+  "trades.details.created": "Created: {date}",
+  "trades.details.updated": "Updated: {date}",
+  "vault.overview.title": "Vault Overview",
+  "videoUpload.deliveryProof": "Upload delivery proof video for verification",
   "dashboard.recentTrades.table.tradeId": "Trade ID",
   "dashboard.recentTrades.table.counterparty": "Counterparty",
   "dashboard.recentTrades.table.amount": "Amount",

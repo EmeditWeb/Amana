@@ -14,6 +14,7 @@ import {
 import { DriverManifestForm, LoadingState, type DriverManifestData } from "@/components/ui";
 import { useAuth } from "@/hooks/useAuth";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
+import { useTranslation } from "@/hooks/useTranslation";
 import {
   api,
   apiConfig,
@@ -47,6 +48,7 @@ const PARTNERS = [
 ];
 
 export default function VaultPage() {
+  const { t } = useTranslation();
   const {
     shortAddress,
     token,
@@ -189,7 +191,7 @@ export default function VaultPage() {
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-text-primary">Vault Overview</h1>
+            <h1 className="text-xl font-bold text-text-primary">{t("vault.overview.title")}</h1>
             <p className="text-xs text-text-secondary mt-0.5">
               Your escrow positions and custody status.
             </p>
