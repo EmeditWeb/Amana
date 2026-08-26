@@ -298,6 +298,11 @@ pub struct Proposal {
     pub proposer: Address,
     pub deadline: u64,
     pub executed: bool,
+    /// Multisig threshold in effect at proposal-creation time. Approval counts
+    /// are checked against this snapshot rather than the live MultisigConfig,
+    /// so a threshold change made via a different in-flight proposal cannot
+    /// retroactively change how many approvals this proposal needs.
+    pub threshold_snapshot: u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +522,16 @@ impl EscrowContract {
         assert!(num_admins > 0, "must have at least 1 admin");
         assert!(threshold > 0, "threshold must be > 0");
         assert!(threshold <= num_admins, "threshold must be <= number of admins");
+        // Reject duplicate admin addresses: a duplicate would give one admin two
+        // effective votes during the approval loop, bypassing the multisig threshold.
+        for i in 0..admins.len() {
+            for j in (i + 1)..admins.len() {
+                assert!(
+                    admins.get(i).unwrap() != admins.get(j).unwrap(),
+                    "duplicate admin address is not allowed"
+                );
+            }
+        }
         // Require authentication from every initial admin.
         for a in admins.iter() {
             a.require_auth();
@@ -704,12 +719,18 @@ impl EscrowContract {
             deadline > env.ledger().timestamp(),
             "deadline must be in the future"
         );
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
         let proposal = Proposal {
             id: proposal_id,
             operation: ProposalOperation::Upgrade(wasm_hash.clone()),
             proposer: admin.clone(),
             deadline,
             executed: false,
+            threshold_snapshot: config.threshold,
         };
         env.storage()
             .instance()
@@ -746,6 +767,15 @@ impl EscrowContract {
             new_threshold <= num_new,
             "threshold must be <= number of admins"
         );
+        // Reject duplicate admin addresses for the same reason as initialize().
+        for i in 0..new_admins.len() {
+            for j in (i + 1)..new_admins.len() {
+                assert!(
+                    new_admins.get(i).unwrap() != new_admins.get(j).unwrap(),
+                    "duplicate admin address is not allowed"
+                );
+            }
+        }
         assert!(
             deadline > env.ledger().timestamp(),
             "deadline must be in the future"
@@ -755,12 +785,18 @@ impl EscrowContract {
             .instance()
             .get(&DataKey::NextProposalId)
             .unwrap_or(1);
+        let config: MultisigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultisigConfig)
+            .expect("Not initialized");
         let proposal = Proposal {
             id: proposal_id,
             operation: ProposalOperation::ChangeAdmin(new_admins.clone(), new_threshold),
             proposer: admin.clone(),
             deadline,
             executed: false,
+            threshold_snapshot: config.threshold,
         };
         env.storage()
             .instance()
@@ -785,11 +821,6 @@ impl EscrowContract {
     /// auto-executes. Emits `AdminApprovalEvent`.
     pub fn approve_proposal(env: Env, admin: Address, proposal_id: u32) {
         Self::require_admin(&env, admin);
-        let config: MultisigConfig = env
-            .storage()
-            .instance()
-            .get(&DataKey::MultisigConfig)
-            .expect("Not initialized");
         let mut proposal: Proposal = env
             .storage()
             .instance()
@@ -819,8 +850,11 @@ impl EscrowContract {
         }
         .publish(&env);
 
-        // Auto-execute when threshold is reached
-        if approvals.len() >= config.threshold as usize {
+        // Auto-execute when the threshold snapshotted at proposal-creation time is
+        // reached. Using the snapshot (not the live MultisigConfig) prevents a
+        // threshold change from a different in-flight proposal from silently
+        // altering how many approvals this proposal needs.
+        if approvals.len() >= proposal.threshold_snapshot as usize {
             proposal.executed = true;
             env.storage()
                 .instance()

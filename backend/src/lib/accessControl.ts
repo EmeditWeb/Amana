@@ -36,3 +36,13 @@ export function getAdminAllowlistLowercase(): Set<string> {
 export function isMediatorAddress(address: string): boolean {
   return getMediatorAllowlist().has(address);
 }
+
+/**
+ * Returns true when `address` appears in the ADMIN_STELLAR_PUBKEYS allowlist,
+ * comparing case-insensitively via the same normalized set used elsewhere
+ * (e.g. trade.routes.ts) so admin checks are consistent regardless of the
+ * casing a caller's wallet address happens to arrive in.
+ */
+export function isAdminAddress(address: string): boolean {
+  return getAdminAllowlistLowercase().has(address.trim().toLowerCase());
+}

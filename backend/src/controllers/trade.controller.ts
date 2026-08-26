@@ -110,6 +110,10 @@ export class TradeController {
           buyerLossBps: buyerBps,
           sellerLossBps: sellerBps,
         });
+      const idempotencyKeyHeader = req.headers["idempotency-key"];
+      const idempotencyKey =
+        typeof idempotencyKeyHeader === "string" ? idempotencyKeyHeader : undefined;
+
       await this.tradeService.createPendingTrade({
         tradeId,
         buyerAddress,
@@ -117,6 +121,7 @@ export class TradeController {
         amountUsdc: normalizedAmountUsdc,
         buyerLossBps: buyerBps,
         sellerLossBps: sellerBps,
+        idempotencyKey,
       });
       tradeStatusEvents.publish({
         trade_id: tradeId,
