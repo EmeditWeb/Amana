@@ -236,36 +236,45 @@ export class TradeService {
   }
 
   async getUserStats(address: string) {
-    const trades = await this.prisma.trade.findMany({
-      where: {
+    const key = `stats:user:${address}`;
+    return cacheService.getOrSet(key, 300, async () => {
+      // Total trades (count)
+      const where = {
         OR: [{ buyerAddress: address }, { sellerAddress: address }],
-      },
-      select: {
-        amountUsdc: true,
-        status: true,
-      },
+      } as Prisma.TradeWhereInput;
+
+      const totalTrades = await this.prisma.trade.count({ where });
+
+      // Total volume: cast stored string to numeric in SQL
+      const totalVolumeRows: Array<{ total_volume: string }> = await this.prisma.$queryRaw`
+        SELECT COALESCE(SUM((amount_usdc)::numeric), 0)::text AS total_volume
+        FROM "Trade"
+        WHERE buyer_address = ${address} OR seller_address = ${address}
+      `;
+      const totalVolume = parseFloat(totalVolumeRows[0]?.total_volume ?? "0");
+
+      // Status-based counts using groupBy
+      const grouped = await this.prisma.trade.groupBy({
+        by: ["status"],
+        where,
+        _count: { _all: true },
+      });
+
+      const openStatuses = new Set<TradeStatus>([
+        TradeStatus.PENDING_SIGNATURE,
+        TradeStatus.CREATED,
+        TradeStatus.FUNDED,
+        TradeStatus.DELIVERED,
+        TradeStatus.DISPUTED,
+      ]);
+
+      const openTrades = grouped.reduce((sum, g) => {
+        if (openStatuses.has(g.status as TradeStatus)) return sum + (g._count?._all ?? 0);
+        return sum;
+      }, 0);
+
+      return { totalTrades, totalVolume, openTrades };
     });
-
-    const openStatuses = new Set<TradeStatus>([
-      TradeStatus.PENDING_SIGNATURE,
-      TradeStatus.CREATED,
-      TradeStatus.FUNDED,
-      TradeStatus.DELIVERED,
-      TradeStatus.DISPUTED,
-    ]);
-
-    const totalTrades = trades.length;
-    const totalVolume = trades.reduce((sum, trade) => {
-      const amount = Number(trade.amountUsdc);
-      return sum + (Number.isFinite(amount) ? amount : 0);
-    }, 0);
-    const openTrades = trades.filter((trade) => openStatuses.has(trade.status)).length;
-
-    return {
-      totalTrades,
-      totalVolume,
-      openTrades,
-    };
   }
 
   private parseSort(sort?: string): Prisma.TradeOrderByWithRelationInput[] {

@@ -13,6 +13,10 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { useOffline } from "@/hooks/useOffline";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { OfflineState } from "@/components/ui/OfflineState";
+import { useModal } from "@/hooks/useModal";
+import { useDraftForm } from "@/hooks/useDraftForm";
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/Modal";
+import { z } from "zod";
 
 export function DashboardContent() {
   const { t } = useTranslation();
@@ -23,6 +27,46 @@ export function DashboardContent() {
   const [recentTrades, setRecentTrades] = useState<TradeResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Drafts modal and button component (inline)
+  function DraftsButton() {
+    const modal = useModal();
+    const draftsHook = useDraftForm("trade:create", z.any());
+    const drafts = draftsHook.list();
+
+    return (
+      <div>
+        <button onClick={modal.open} className="px-3 py-2 border border-border-default rounded-md text-sm">Drafts ({drafts.length})</button>
+        <Modal open={modal.isOpen} onOpenChange={modal.setIsOpen}>
+          <ModalContent overlayOpacity="medium">
+            <ModalHeader>
+              <ModalTitle>Drafts</ModalTitle>
+            </ModalHeader>
+            <ModalBody>
+              {drafts.length === 0 ? (
+                <div className="text-sm text-text-secondary">No drafts</div>
+              ) : (
+                <ul className="space-y-2">
+                  {drafts.map((d) => (
+                    <li key={d.id} className="flex justify-between items-center">
+                      <div className="text-sm text-text-primary">{new Date(d.updatedAt).toLocaleString()}</div>
+                      <div className="flex gap-2">
+                        <a href="/trades/create" onClick={() => { /* restore is done on create page */ }} className="text-sm text-gold hover:underline">Open</a>
+                        <button onClick={() => { draftsHook.clear(d.id); }} className="text-sm px-2 py-1 bg-bg-card border border-border-default rounded">Delete</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <button onClick={modal.close} className="px-4 py-2 bg-bg-card border border-border-default rounded">Close</button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      </div>
+    );
+  }
 
   const fetchDashboardData = useCallback(async () => {
       if (!isAuthenticated || !token) {
@@ -134,6 +178,8 @@ export function DashboardContent() {
           >
             {t("dashboard.createTrade")}
           </Link>
+          {/* Drafts */}
+          <DraftsButton />
         </div>
       </div>
 

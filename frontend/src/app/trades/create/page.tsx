@@ -1,5 +1,7 @@
 "use client";
-import { TradeProvider, useTradeStep } from "./TradeContext";
+import { TradeProvider, useTradeStep, useTradeData } from "./TradeContext";
+import { useDraftForm } from "@/hooks/useDraftForm";
+import { z } from "zod";
 import Step1Details from "./steps/Step1Details";
 import Step2Negotiation from "./steps/Step2Negotiation";
 import Step3Review from "./steps/Step3Review";
@@ -50,9 +52,27 @@ function StepIndicator() {
 
 function CreateTradeInner() {
   const { step } = useTradeStep();
+  const draft = useDraftForm("trade:create", z.any());
+  const { update } = useTradeData();
+  const drafts = draft.list();
+  const hasDrafts = drafts.length > 0;
+
+  function handleRestoreLatest() {
+    const loaded = draft.load();
+    if (loaded) update(loaded as any);
+  }
   return (
     <div className="min-h-screen bg-bg-primary flex items-start justify-center px-4 py-12">
       <div className="w-full max-w-lg">
+        {hasDrafts && (
+          <div className="mb-4 p-3 rounded-lg bg-bg-elevated border border-border-default flex items-center justify-between">
+            <div className="text-sm text-text-secondary">You have an unsaved trade draft. Restore it?</div>
+            <div className="flex gap-2">
+              <button onClick={() => handleRestoreLatest()} className="px-3 py-1 bg-gold text-text-inverse rounded-md text-sm">Restore</button>
+              <button onClick={() => draft.clear()} className="px-3 py-1 bg-bg-card border border-border-default rounded-md text-sm">Dismiss</button>
+            </div>
+          </div>
+        )}
         <div className="mb-6">
           <Link href="/" className="text-text-muted text-sm hover:text-text-secondary transition-colors">
             ← Back

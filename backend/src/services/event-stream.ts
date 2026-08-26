@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { metrics } from "@opentelemetry/api";
 import { eventIndexerEmitter, IndexedEventRecord } from "./event-indexer";
 import { appLogger } from "../middleware/logger";
+import { AuthService } from "./auth.service";
 
 interface StreamFilter {
   tradeId?: string;
@@ -39,6 +40,7 @@ export class EventStreamService {
     this.registerMetrics();
 
     this.wss.on("connection", (ws: WebSocket, req) => {
+      (async () => {
       const reject = (code: number, reason: string) => {
         try {
           ws.close(code, reason);
@@ -59,10 +61,22 @@ export class EventStreamService {
       if (tradeId) filter.tradeId = tradeId;
       if (eventType) filter.eventType = eventType;
 
-      const userId =
-        url.searchParams.get("user") ??
-        req.socket.remoteAddress ??
-        "anonymous";
+      // Authenticate: require Authorization: Bearer <JWT>
+      const authHeader = (req.headers.authorization as string) || (req.headers["authorization"] as any) || "";
+      let userId = req.socket.remoteAddress ?? "anonymous";
+      if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
+        appLogger.warn("[EventStream] Missing Authorization header; rejecting websocket");
+        return reject(1008, "Unauthorized: missing token");
+      }
+
+      const token = authHeader.split(" ")[1];
+      try {
+        const payload = await AuthService.validateToken(token);
+        userId = payload.walletAddress.toLowerCase();
+      } catch (err) {
+        appLogger.warn({ err }, "[EventStream] Token validation failed; rejecting websocket");
+        return reject(1008, "Unauthorized: invalid token");
+      }
 
       const currentUserCount = this.userCounts.get(userId) ?? 0;
       if (currentUserCount >= MAX_CONNECTIONS_PER_USER) {
@@ -86,6 +100,7 @@ export class EventStreamService {
       ws.on("error", () => this.removeClient(ws));
 
       ws.send(JSON.stringify({ type: "connected", message: "Event stream connected" }));
+      })();
     });
 
     this.heartbeatInterval = setInterval(() => this.heartbeat(), HEARTBEAT_INTERVAL_MS);
