@@ -231,7 +231,7 @@ describe("FeeAccountingService", () => {
       ]);
 
       const svc = new FeeAccountingService(db as any);
-      const csv = await svc.exportCsv({});
+      const { csv, totalExported, truncated } = await svc.exportCsv({});
 
       expect(csv).toContain('"id"');
       expect(csv).toContain('"tradeId"');
@@ -239,6 +239,8 @@ describe("FeeAccountingService", () => {
       expect(csv).toContain('"tradeAmountUsdc"');
       expect(csv).toContain("trade-001");
       expect(csv).toContain("1.000000");
+      expect(totalExported).toBe(1);
+      expect(truncated).toBe(false);
     });
 
     it("returns empty CSV rows when no records", async () => {
@@ -246,12 +248,33 @@ describe("FeeAccountingService", () => {
       db.platformFeeEvent.findMany.mockResolvedValue([]);
 
       const svc = new FeeAccountingService(db as any);
-      const csv = await svc.exportCsv({});
+      const { csv, totalExported, truncated } = await svc.exportCsv({});
 
       // Headers still present, no data rows beyond header
       expect(csv).toContain('"id"');
       const lines = csv.trim().split("\n");
       expect(lines).toHaveLength(1); // header only
+      expect(totalExported).toBe(0);
+      expect(truncated).toBe(false);
+    });
+
+    it("enforces max row limit", async () => {
+      const db = makeMockDb();
+      const records = Array.from({ length: 3 }, (_, i) => ({
+        id: i + 1,
+        tradeId: `trade-${i + 1}`,
+        tradeAmountUsdc: "100.00",
+        feeUsdc: "1.000000",
+        collectedAt: new Date("2026-07-01T00:00:00.000Z"),
+        ledgerSequence: 42,
+      }));
+      db.platformFeeEvent.findMany.mockResolvedValue(records);
+
+      const svc = new FeeAccountingService(db as any);
+      const { csv, totalExported, truncated } = await svc.exportCsv({ maxRows: 2 });
+
+      expect(totalExported).toBe(2);
+      expect(truncated).toBe(true);
     });
   });
 });

@@ -1,6 +1,6 @@
 import { PrismaClient, DisputeStatus } from "@prisma/client";
 import { AppError, ErrorCode } from "../errors/errorCodes";
-import { getMediatorAllowlist } from "../lib/accessControl";
+import { getMediatorAllowlist, isMediatorAddress } from "../lib/accessControl";
 import { TracingHelper } from "../config/tracing";
 import {
   COMPLETED_DISPUTE_STATUSES,
@@ -82,7 +82,7 @@ export class DisputeService {
     const { status, page = 1, limit = 10 } = params;
     const offset = (page - 1) * limit;
 
-    if (!getMediatorAllowlist().has(mediatorAddress)) {
+    if (!isMediatorAddress(mediatorAddress)) {
       throw new AppError(
         ErrorCode.AUTH_ERROR,
         "Unauthorized: Not a mediator",
@@ -138,7 +138,7 @@ export class DisputeService {
     mediatorAddress: string,
     olderThanDays = 90,
   ): Promise<DisputeCleanupResult> {
-    if (!getMediatorAllowlist().has(mediatorAddress)) {
+    if (!isMediatorAddress(mediatorAddress)) {
       throw new AppError(
         ErrorCode.AUTH_ERROR,
         "Unauthorized: Not a mediator",
@@ -189,7 +189,7 @@ export class DisputeService {
     return TracingHelper.withSpan(
       "dispute.transition_status",
       async (span) => {
-        if (!getMediatorAllowlist().has(mediatorAddress)) {
+        if (!isMediatorAddress(mediatorAddress)) {
           throw new AppError(
             ErrorCode.AUTH_ERROR,
             "Unauthorized: Not a mediator",

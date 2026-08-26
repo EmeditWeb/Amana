@@ -6,7 +6,7 @@ import { validateRequest } from "../middleware/validateRequest";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../errors/errorCodes";
-import { getMediatorAllowlist } from "../lib/accessControl";
+import { getMediatorAllowlist, isMediatorAddress } from "../lib/accessControl";
 import { Parser } from "json2csv";
 
 const listDisputesQuerySchema = z.object({
@@ -134,7 +134,7 @@ export function createDisputeRouter(prisma = defaultPrisma) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      if (!getMediatorAllowlist().has(callerAddress)) {
+      if (!isMediatorAddress(callerAddress)) {
         return res.status(403).json({ error: "Unauthorized: Not a mediator" });
       }
 
