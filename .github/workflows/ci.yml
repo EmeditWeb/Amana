@@ -132,6 +132,11 @@ jobs:
         run: pnpm build
         working-directory: ${{ matrix.stack }}
 
+      - name: Lint
+        if: matrix.stack == 'frontend' || matrix.stack == 'backend'
+        run: pnpm lint
+        working-directory: ${{ matrix.stack }}
+
       - name: Frontend test
         if: matrix.stack == 'frontend'
         run: pnpm test -- --coverage
