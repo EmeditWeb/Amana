@@ -6,6 +6,12 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { AuthRequest } from '../services/auth.service';
 import { RATE_LIMIT_CONFIG } from '../config/rateLimit';
 import { createIpRateLimiter } from '../lib/rateLimit';
+import {
+  REFRESH_TOKEN_COOKIE,
+  clearAuthCookies,
+  getCookie,
+  setAuthCookies,
+} from '../lib/authCookies';
 
 const authLimiter = createIpRateLimiter(RATE_LIMIT_CONFIG.auth);
 const refreshLimiter = createIpRateLimiter(RATE_LIMIT_CONFIG.authRefresh);
@@ -51,8 +57,10 @@ const verifySchema = z.object({
 router.post('/verify', authLimiter, async (req, res) => {
   try {
     const { walletAddress, signedChallenge } = verifySchema.parse(req.body);
-    const token = await AuthService.verifySignatureAndIssueJWT(walletAddress, signedChallenge);
-    res.json({ token });
+    const accessToken = await AuthService.verifySignatureAndIssueJWT(walletAddress, signedChallenge);
+    const session = await AuthService.issueSession(walletAddress, accessToken);
+    setAuthCookies(res, session);
+    res.json({ authenticated: true });
   } catch (err: unknown) {
     const { status, error } = handleAuthError(err, true);
     res.status(status).json({ error });
@@ -66,22 +74,27 @@ router.post('/logout', authMiddleware, async (req: AuthRequest, res) => {
     if (jti && exp) {
       await AuthService.revokeToken(jti, exp);
     }
+    await AuthService.revokeRefreshToken(getCookie(req, REFRESH_TOKEN_COOKIE));
+    clearAuthCookies(res);
     res.json({ message: 'Logged out successfully' });
   } catch (_err: unknown) { // eslint-disable-line @typescript-eslint/no-unused-vars
+    clearAuthCookies(res);
     res.status(500).json({ error: 'Logout failed' });
   }
 });
 
 router.post('/refresh', refreshLimiter, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Missing or invalid authorization header' });
+    const refreshToken = getCookie(req, REFRESH_TOKEN_COOKIE);
+    if (!refreshToken) {
+      clearAuthCookies(res);
+      return res.status(401).json({ error: 'Missing refresh token cookie' });
     }
-    const token = authHeader.split(' ')[1] as string;
-    const newToken = await AuthService.refreshToken(token);
-    res.json({ token: newToken });
+    const session = await AuthService.rotateRefreshToken(refreshToken);
+    setAuthCookies(res, session);
+    res.json({ authenticated: true });
   } catch (err: unknown) {
+    clearAuthCookies(res);
     const msg = err instanceof Error ? err.message : String(err);
     res.status(401).json({ error: msg });
   }

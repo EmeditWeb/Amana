@@ -151,6 +151,9 @@ export function createApp(
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
+  // Origin validation is mandatory for cookie-authenticated mutations.
+  app.use(csrfProtection());
+
   // Correlation ID must be registered before the logger so every log line
   // produced by pino-http already carries the tracing IDs.
   app.use(correlationIdMiddleware);

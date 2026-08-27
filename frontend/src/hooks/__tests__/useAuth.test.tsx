@@ -46,6 +46,7 @@ jest.mock("@/lib/api", () => ({
       verify: jest.fn(),
       logout: jest.fn(),
       refresh: jest.fn(),
+      validate: jest.fn(),
     },
   },
   ApiError: class ApiError extends Error {
@@ -64,6 +65,7 @@ const mockedChallenge = api.auth.challenge as jest.MockedFunction<typeof api.aut
 const mockedVerify = api.auth.verify as jest.MockedFunction<typeof api.auth.verify>;
 const mockedLogout = api.auth.logout as jest.MockedFunction<typeof api.auth.logout>;
 const mockedRefresh = api.auth.refresh as jest.MockedFunction<typeof api.auth.refresh>;
+const mockedValidate = api.auth.validate as jest.MockedFunction<typeof api.auth.validate>;
 
 // ── Freighter response builders ───────────────────────────────────────────────
 type IsConnectedResponse = Awaited<ReturnType<typeof isConnected>>;
@@ -108,22 +110,6 @@ const JWT_TOKEN =
   ).replace(/=/g, "") +
   ".mock-signature";
 
-function makeToken(expiresInSeconds: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  return (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
-    btoa(
-      JSON.stringify({
-        sub: WALLET_ADDRESS.toLowerCase(),
-        walletAddress: WALLET_ADDRESS.toLowerCase(),
-        iat: now,
-        exp: now + expiresInSeconds,
-      })
-    ).replace(/=/g, "") +
-    ".mock-signature"
-  );
-}
-
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -134,6 +120,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 beforeEach(() => {
   jest.clearAllMocks();
   sessionStorage.clear();
+  mockedValidate.mockRejectedValue(new ApiError(401, "No active session"));
 });
 
 // Default: wallet not installed / not connected
@@ -229,11 +216,11 @@ describe("connectWallet", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("authenticate — challenge-verify flow", () => {
-  it("completes the full flow and stores the JWT", async () => {
+  it("completes the flow without exposing the JWT", async () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -243,14 +230,15 @@ describe("authenticate — challenge-verify flow", () => {
     });
 
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.token).toBe(JWT_TOKEN);
+    expect(result.current.token).toBe("http-only-cookie");
+    expect(result.current.token).not.toBe(JWT_TOKEN);
   });
 
   it("calls POST /auth/challenge with the wallet address", async () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -266,7 +254,7 @@ describe("authenticate — challenge-verify flow", () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -281,11 +269,11 @@ describe("authenticate — challenge-verify flow", () => {
     );
   });
 
-  it("persists the JWT to sessionStorage", async () => {
+  it("never persists the JWT to sessionStorage", async () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -294,7 +282,7 @@ describe("authenticate — challenge-verify flow", () => {
       await result.current.authenticate();
     });
 
-    expect(sessionStorage.getItem("amana_jwt")).toBe(JWT_TOKEN);
+    expect(sessionStorage.getItem("amana_jwt")).toBeNull();
   });
 
   it("sets error state when wallet is not connected", async () => {
@@ -365,11 +353,11 @@ describe("authenticate — challenge-verify flow", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("Subsequent authenticated request", () => {
-  it("exposes the JWT token in state for use in Authorization headers", async () => {
+  it("exposes only a non-secret session marker", async () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -378,8 +366,8 @@ describe("Subsequent authenticated request", () => {
       await result.current.authenticate();
     });
 
-    // The token is available for consumers to attach as Authorization: Bearer <token>
-    expect(result.current.token).toBe(JWT_TOKEN);
+    expect(result.current.token).toBe("http-only-cookie");
+    expect(result.current.token).not.toContain("eyJ");
     expect(result.current.isAuthenticated).toBe(true);
   });
 });
@@ -393,7 +381,7 @@ describe("logout", () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
     mockedLogout.mockResolvedValue({ message: "Logged out successfully" });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -418,7 +406,7 @@ describe("logout", () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
     mockedLogout.mockResolvedValue({ message: "Logged out successfully" });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -432,14 +420,14 @@ describe("logout", () => {
       await result.current.logout();
     });
 
-    expect(mockedLogout).toHaveBeenCalledWith(JWT_TOKEN);
+    expect(mockedLogout).toHaveBeenCalledWith();
   });
 
   it("clears token even when the logout API call fails", async () => {
     mockWalletConnected();
     mockedChallenge.mockResolvedValue({ challenge: CHALLENGE_STRING });
     mockedSignMessage.mockResolvedValue(signMessageRes(SIGNED_CHALLENGE));
-    mockedVerify.mockResolvedValue({ token: JWT_TOKEN });
+    mockedVerify.mockResolvedValue({ authenticated: true });
     mockedLogout.mockRejectedValue(new Error("Server error"));
 
     const { result } = renderHook(() => useAuth(), { wrapper });
@@ -465,15 +453,20 @@ describe("logout", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("Session restoration", () => {
-  it("restores authentication from a valid stored JWT on mount", async () => {
+  it("restores authentication by validating the HttpOnly cookie", async () => {
     sessionStorage.setItem("amana_jwt", JWT_TOKEN);
     mockWalletConnected();
+    mockedValidate.mockResolvedValue({
+      valid: true,
+      user: { walletAddress: WALLET_ADDRESS.toLowerCase() },
+    });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.token).toBe(JWT_TOKEN);
+    expect(result.current.token).toBe("http-only-cookie");
+    expect(sessionStorage.getItem("amana_jwt")).toBeNull();
   });
 
   it("ignores an expired stored JWT on mount", async () => {
@@ -502,54 +495,19 @@ describe("Session restoration", () => {
   });
 });
 
-describe("JWT refresh before expiry", () => {
-  beforeEach(() => {
-    jest.useFakeTimers({ advanceTimers: true });
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it("refreshes the token shortly before it expires and updates storage", async () => {
-    const nearExpiryToken = makeToken(65); // inside the 60s refresh buffer window
-    const refreshedToken = makeToken(86400);
-    sessionStorage.setItem("amana_jwt", nearExpiryToken);
+describe("cookie session restoration", () => {
+  it("does not call the refresh endpoint while a valid cookie session exists", async () => {
     mockWalletConnected();
-    mockedRefresh.mockResolvedValue({ token: refreshedToken });
+    mockedValidate.mockResolvedValue({
+      valid: true,
+      user: { walletAddress: WALLET_ADDRESS.toLowerCase() },
+    });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.token).toBe(nearExpiryToken);
 
-    await act(async () => {
-      jest.advanceTimersByTime(6000);
-    });
-
-    await waitFor(() => expect(result.current.token).toBe(refreshedToken));
-    expect(mockedRefresh).toHaveBeenCalledWith(nearExpiryToken);
     expect(result.current.isAuthenticated).toBe(true);
-    expect(sessionStorage.getItem("amana_jwt")).toBe(refreshedToken);
-  });
-
-  it("logs the user out when refresh fails", async () => {
-    const nearExpiryToken = makeToken(65);
-    sessionStorage.setItem("amana_jwt", nearExpiryToken);
-    mockWalletConnected();
-    mockedRefresh.mockRejectedValue(
-      new ApiError(401, "Token refresh failed")
-    );
-
-    const { result } = renderHook(() => useAuth(), { wrapper });
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    await act(async () => {
-      jest.advanceTimersByTime(6000);
-    });
-
-    await waitFor(() => expect(result.current.isAuthenticated).toBe(false));
-    expect(result.current.token).toBeNull();
-    expect(result.current.error).toBe("Token refresh failed");
+    expect(mockedRefresh).not.toHaveBeenCalled();
     expect(sessionStorage.getItem("amana_jwt")).toBeNull();
   });
 });

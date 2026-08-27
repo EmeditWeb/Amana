@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { AppError, ErrorCode } from '../errors/errorCodes';
 import { ServiceErrorConverter, ServiceType } from '../errors/serviceErrorConverter';
+import { ACCESS_TOKEN_COOKIE, getCookie } from './authCookies';
 
 /**
  * Authentication header parsing result
@@ -37,6 +38,10 @@ export class AuthHelper {
 
     // Missing header
     if (!authHeader) {
+      const cookieToken = getCookie(req, ACCESS_TOKEN_COOKIE);
+      if (cookieToken) {
+        return { valid: true, token: cookieToken };
+      }
       return {
         valid: false,
         error: new AppError(
