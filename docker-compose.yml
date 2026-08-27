@@ -148,6 +148,16 @@ services:
           memory: 512M
     profiles: [staging]
 
+  loki:
+    image: grafana/loki:3.0
+    ports: ["3100:3100"]
+    profiles: [staging]
+
+  promtail:
+    image: grafana/promtail:3.0
+    volumes: ["/var/log:/var/log", "/var/lib/docker/containers:/var/lib/docker/containers"]
+    profiles: [staging]
+
   # ── Test (CI / ephemeral) ───────────────────────────────────────────────────
   # Uses tmpfs so data never persists between test runs.
   postgres-test:
