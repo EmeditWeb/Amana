@@ -23,14 +23,6 @@ on:
     branches:
       - main
       - develop
-    paths:
-      - ".github/workflows/ci.yml"
-      - "frontend/**"
-      - "backend/**"
-      - "mobile/**"
-      - "contracts/**"
-      - "scripts/**"
-      - "infra/**"
 
 jobs:
   changes:
@@ -142,6 +134,16 @@ jobs:
         run: pnpm test -- --coverage
         working-directory: frontend
 
+      - name: Upload frontend coverage
+        if: matrix.stack == 'frontend'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend
+          fail_ci_if_error: true
+
       - name: Frontend visual regression tests
         if: matrix.stack == 'frontend'
         run: pnpm test:visual
@@ -156,6 +158,16 @@ jobs:
           pnpm test -- --coverage
         working-directory: backend
 
+      - name: Upload backend coverage
+        if: matrix.stack == 'backend'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: backend/coverage/lcov.info
+          flags: backend
+          name: backend
+          fail_ci_if_error: true
+
       - name: Mobile type check
         if: matrix.stack == 'mobile'
         run: pnpm type-check
@@ -168,8 +180,18 @@ jobs:
 
       - name: Mobile test
         if: matrix.stack == 'mobile'
-        run: pnpm test
+        run: pnpm test:coverage
         working-directory: mobile
+
+      - name: Upload mobile coverage
+        if: matrix.stack == 'mobile'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: mobile/coverage/lcov.info
+          flags: mobile
+          name: mobile
+          fail_ci_if_error: true
 
       - name: Mobile security audit
         if: matrix.stack == 'mobile'
@@ -190,6 +212,25 @@ jobs:
         if: matrix.stack == 'contracts'
         working-directory: contracts/amana_escrow
         run: cargo test --locked
+
+      - name: Install cargo-llvm-cov
+        if: matrix.stack == 'contracts'
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate contracts coverage
+        if: matrix.stack == 'contracts'
+        working-directory: contracts
+        run: cargo llvm-cov --workspace --lcov --output-path coverage/lcov.info
+
+      - name: Upload contracts coverage
+        if: matrix.stack == 'contracts'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: contracts/coverage/lcov.info
+          flags: contracts
+          name: contracts
+          fail_ci_if_error: true
 
       - name: Build WASM artifact
         if: matrix.stack == 'contracts'
@@ -221,6 +262,118 @@ jobs:
           name: ${{ matrix.stack }}-artifact
           path: ${{ matrix.stack == 'frontend' && 'frontend/coverage/' || matrix.stack == 'backend' && 'backend/coverage/' || matrix.stack == 'mobile' && 'mobile/ci-artifacts/' || matrix.stack == 'contracts' && 'contracts/amana_escrow/target/wasm32-unknown-unknown/release/amana_escrow.wasm' }}
           retention-days: 7
+
+  e2e:
+    name: Playwright E2E (seeded staging)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: >
+      github.event_name == 'pull_request' ||
+      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: |
+            frontend/pnpm-lock.yaml
+            backend/pnpm-lock.yaml
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install application dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: backend
+
+      - name: Create staging environment
+        run: |
+          cat > .env.staging <<'EOF'
+          STAGING_POSTGRES_PASSWORD=staging-password
+          STAGING_REDIS_PASSWORD=staging-redis-pass
+          STAGING_DATABASE_URL=postgresql://postgres:staging-password@localhost:5434/amana_staging
+          DATABASE_URL=postgresql://postgres:staging-password@localhost:5434/amana_staging
+          REDIS_URL=redis://:staging-redis-pass@localhost:6380
+          JWT_SECRET=ci-e2e-jwt-secret-value-with-minimum-length-32
+          TRADE_NOTES_ENCRYPTION_KEY=ci-e2e-trade-notes-encryption-key-base64-32chr
+          AMANA_ESCROW_CONTRACT_ID=ci-e2e-escrow-contract
+          USDC_CONTRACT_ID=ci-e2e-usdc-contract
+          CORS_ORIGINS=http://localhost:3000
+          PORT=4000
+          EOF
+
+      - name: Start seeded staging stack
+        run: |
+          chmod +x ./scripts/staging-up.sh ./scripts/staging-validate.sh
+          ./scripts/staging-up.sh --reset
+          set -a
+          source .env.staging
+          set +a
+          nohup pnpm --dir backend dev > backend-e2e.log 2>&1 &
+          nohup pnpm --dir frontend dev > frontend-e2e.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:4000/health/ready >/dev/null && curl --fail --silent http://localhost:3000/ >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              echo "Staging services did not become ready"
+              cat backend-e2e.log frontend-e2e.log
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run Playwright E2E tests
+        id: e2e
+        working-directory: frontend
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/e2e-junit.xml
+        run: pnpm exec playwright test tests/e2e --project=chromium-desktop --reporter=line,html,junit
+
+      - name: Upload Playwright reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-reports
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            backend-e2e.log
+            frontend-e2e.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Add E2E results to summary
+        if: always()
+        run: |
+          {
+            echo "## Playwright E2E"
+            echo "- Environment: seeded staging"
+            echo "- Projects: chromium-desktop"
+            echo "- Result: ${{ steps.e2e.outcome }}"
+            echo "- HTML report and traces: playwright-e2e-reports artifact"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tear down staging stack
+        if: always()
+        run: docker compose --profile staging down -v --remove-orphans
 
   # Issue #998: container image vulnerability scanning. This repo does not
   # currently build/publish Docker images anywhere in CI (no Dockerfile

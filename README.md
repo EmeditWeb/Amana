@@ -1,5 +1,7 @@
 # 🌾 Amana: Trust as a Service for Agricultural Products
 
+[![codecov](https://codecov.io/gh/KingFRANKHOOD/Amana/branch/main/graph/badge.svg)](https://codecov.io/gh/KingFRANKHOOD/Amana)
+
 ![Stellar](https://img.shields.io/badge/Network-Stellar-black?style=for-the-badge&logo=stellar)
 ![Soroban](<https://img.shields.io/badge/Contracts-Soroban%20(Rust)-orange?style=for-the-badge>)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)

@@ -1,16 +1,30 @@
 # Security Scanning
 
-Amana runs automated dependency vulnerability scanning on every CI run and provides a local script for ad-hoc scans.
+Amana runs automated dependency vulnerability scanning on pull requests and in
+the weekly scheduled security workflow. The scanners fail on high or critical
+findings; they are not reporting-only checks.
 
 ## CI Pipeline
 
-Security audits run in the existing CI jobs (`.github/workflows/ci.yml`) and **fail the build** on any **high** or **critical** severity vulnerability.
+Security audits run in `.github/workflows/security-audit.yml` and **fail the
+workflow** on any **high** or **critical** severity vulnerability.
 
 | Job | Tool | Command | Fail threshold |
 |-----|------|---------|----------------|
-| `frontend` | npm audit | `npm audit --audit-level=high` | high + critical |
-| `backend` | npm audit | `npm audit --audit-level=high` | high + critical |
+| `frontend` | pnpm audit | `pnpm audit --audit-level=high` | high + critical |
+| `backend` | pnpm audit | `pnpm audit --audit-level=high` | high + critical |
+| `mobile` | pnpm audit | `pnpm audit --audit-level=high` | high + critical |
 | `contracts` | cargo audit | `cargo audit` | any advisory |
+
+Pull requests also run GitHub's dependency review with a high-severity
+threshold. The weekly workflow runs Trivy across all four stacks and uploads
+SARIF results to the GitHub Security tab. Audit JSON and SARIF files are kept
+as workflow artifacts for investigation.
+
+For scheduled or manually dispatched failures, configure the optional
+`SECURITY_AUDIT_SLACK_WEBHOOK` repository secret to notify the security channel.
+The workflow always writes a failure summary with a run link, and response
+steps are documented in the [vulnerability response runbook](runbooks/security-vulnerability-response.md).
 
 Docker image scanning via Trivy can be added once the project ships Dockerfiles (see [docker-profiles.md](docker-profiles.md)).
 
