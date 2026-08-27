@@ -42,6 +42,20 @@ pub const MIN_TRADE_AMOUNT: i128 = 1_000_000_000;
 /// Maximum byte length for trade event data strings.
 pub const MAX_EVENT_DATA_LEN: u32 = 256;
 
+/// Maximum number of trade history entries stored per trade.
+///
+/// History is capped at this value to bound on-chain storage costs and keep
+/// read/write operations for active trades predictable. When the cap is
+/// reached, the oldest entry is removed before the new one is appended,
+/// implementing a fixed-size sliding window (circular buffer pattern).
+///
+/// Storage cost impact: each `TradeEvent` is roughly 300–400 bytes on-chain
+/// (event_type string ≤ 32 chars, timestamp u64, actor Address, data string
+/// ≤ 256 bytes). 100 entries ≈ 30–40 KB per trade — a safe upper bound for
+/// Soroban persistent storage while still capturing the full lifecycle of any
+/// realistic trade flow (typical happy-path trades generate ≤ 10 events).
+pub const MAX_HISTORY_LEN: u32 = 100;
+
 fn checked_fee_amount(amount: i128, fee_bps: u32) -> i128 {
     amount
         .checked_mul(fee_bps as i128)
@@ -1848,10 +1862,18 @@ impl EscrowContract {
         // Emit on-chain event
         DisputeInitiatedEvent {
             trade_id,
-            initiator,
+            initiator: initiator.clone(),
             reason_hash,
         }
         .publish(&env);
+
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "disputed",
+            initiator,
+            "dispute initiated",
+        );
 
         Self::bump_instance_ttl(&env);
     }
@@ -2011,9 +2033,17 @@ impl EscrowContract {
             trade_id,
             seller_payout: seller_net,
             buyer_refund,
-            mediator,
+            mediator: mediator.clone(),
         }
         .publish(&env);
+
+        Self::record_trade_event(
+            &env,
+            trade_id,
+            "resolved",
+            mediator,
+            "dispute resolved by mediator",
+        );
 
         Self::bump_instance_ttl(&env);
     }
@@ -2303,6 +2333,11 @@ impl EscrowContract {
     }
 
     /// Appends a TradeEvent to the persistent history for trade_id.
+    ///
+    /// When the history vector reaches [`MAX_HISTORY_LEN`] entries, the oldest
+    /// entry is removed before the new one is appended, bounding storage costs
+    /// to a fixed window. This is a sliding-window / circular-buffer pattern:
+    /// the most recent `MAX_HISTORY_LEN` events are always retained.
     fn record_trade_event(env: &Env, trade_id: u64, event_type: &str, actor: Address, data: &str) {
         assert!(
             (data.len() as u32) <= MAX_EVENT_DATA_LEN,
@@ -2314,6 +2349,11 @@ impl EscrowContract {
             .persistent()
             .get(&key)
             .unwrap_or_else(|| soroban_sdk::Vec::new(env));
+        // Enforce the history cap: drop the oldest entry when the limit is hit
+        // so that storage costs remain bounded for long-lived or high-activity trades.
+        if history.len() >= MAX_HISTORY_LEN {
+            history.remove(0);
+        }
         history.push_back(TradeEvent {
             event_type: soroban_sdk::String::from_str(env, event_type),
             timestamp: env.ledger().timestamp(),
