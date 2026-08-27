@@ -62,10 +62,6 @@ export class TracedHttpClient {
   /**
    * Set authorization header
    */
-  setAuthToken(token: string): void {
-    this.baseHeaders['Authorization'] = `Bearer ${token}`;
-  }
-
   /**
    * Generate or retrieve correlation ID
    */

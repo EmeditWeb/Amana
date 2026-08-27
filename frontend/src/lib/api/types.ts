@@ -2,8 +2,13 @@ export interface ChallengeResponse {
   challenge: string;
 }
 
-export interface VerifyResponse {
-  token: string;
+export interface SessionResponse {
+  authenticated: true;
+}
+
+export interface ValidateSessionResponse {
+  valid: true;
+  user: { walletAddress: string };
 }
 
 export interface TradeResponse {

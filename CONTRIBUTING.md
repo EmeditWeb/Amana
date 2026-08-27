@@ -16,8 +16,22 @@ We expect all contributors to adhere to a professional, respectful, and collabor
 
 ### Prerequisites
 - **Node.js**: v20+
+- **pnpm**: v10.33.0, activated through Corepack
 - **Docker & Docker Compose**: v2.20+
 - **Rust & Soroban CLI** (for contract development): `soroban-cli` v21+
+
+Enable Corepack and activate the repository's pinned pnpm version before
+installing dependencies:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+pnpm --version
+```
+
+The root `packageManager` field pins the exact pnpm release. Do not use npm or
+generate additional `package-lock.json` files; the install guard rejects
+non-pnpm root installs.
 
 ### Repository Setup
 1. Fork the repository on GitHub and clone your fork:
@@ -27,9 +41,9 @@ We expect all contributors to adhere to a professional, respectful, and collabor
    ```
 2. Install root and workspace dependencies:
    ```bash
-   npm install
-   cd backend && npm install
-   cd ../frontend && npm install
+   pnpm install
+   pnpm --dir backend install
+   pnpm --dir frontend install
    ```
 3. Copy environment configurations:
    ```bash
@@ -40,6 +54,30 @@ We expect all contributors to adhere to a professional, respectful, and collabor
    ```bash
    ./scripts/dev-up.sh
    ```
+
+---
+
+## Monorepo Commands
+
+Run package commands from the repository root with `pnpm --dir`. This keeps
+your working directory stable and uses the lockfile owned by each package.
+
+| Task | Command |
+|---|---|
+| Start the backend | `pnpm --dir backend dev` |
+| Start the frontend | `pnpm --dir frontend dev` |
+| Test the backend | `pnpm --dir backend test` |
+| Test the frontend | `pnpm --dir frontend test` |
+| Lint the backend | `pnpm --dir backend lint` |
+| Lint the frontend | `pnpm --dir frontend lint` |
+| Build the backend | `pnpm --dir backend build` |
+| Build the frontend | `pnpm --dir frontend build` |
+| Start the mobile app | `pnpm --dir mobile start` |
+| Test the routes service | `pnpm --dir routes-d test` |
+
+To pass additional arguments to a package script, insert `--` before them. For
+example, run one frontend test with
+`pnpm --dir frontend test -- --runInBand path/to/test.ts`.
 
 ---
 
@@ -105,8 +143,7 @@ All contributions must include test coverage verifying the new behavior or bug f
 ### Running Tests
 - **Backend unit & integration tests:**
   ```bash
-  cd backend
-  npm test
+  pnpm --dir backend test
   ```
 - **Staging environment validation:**
   ```bash

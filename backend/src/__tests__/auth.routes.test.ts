@@ -6,8 +6,9 @@ process.env.AMANA_ESCROW_CONTRACT_ID = "C123";
 process.env.USDC_CONTRACT_ID = "C456";
 
 import request from "supertest";
+import express from "express";
 import { Keypair } from "@stellar/stellar-sdk";
-import { createApp } from "../app";
+import { authRoutes } from "../routes/auth.routes";
 import { AuthService } from "../services/auth.service";
 import { AppError, ErrorCode } from "../errors/errorCodes";
 
@@ -30,11 +31,18 @@ describe("Auth Routes", () => {
   const mockWallet = Keypair.random().publicKey();
 
   beforeAll(() => {
-    app = createApp();
+    app = express();
+    app.use(express.json());
+    app.use("/auth", authRoutes);
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (AuthService.issueSession as jest.Mock).mockResolvedValue({
+      accessToken: "mock-jwt",
+      refreshToken: "mock-refresh",
+    });
+    (AuthService.revokeRefreshToken as jest.Mock).mockResolvedValue(undefined);
   });
 
   describe("POST /auth/challenge", () => {
@@ -61,7 +69,7 @@ describe("Auth Routes", () => {
   });
 
   describe("POST /auth/verify", () => {
-    it("should return 200 and token on success", async () => {
+    it("sets HttpOnly secure session cookies without exposing tokens", async () => {
       (AuthService.verifySignatureAndIssueJWT as jest.Mock).mockResolvedValue("mock-jwt");
 
       const response = await request(app)
@@ -72,7 +80,18 @@ describe("Auth Routes", () => {
         });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ token: "mock-jwt" });
+      expect(response.body).toEqual({ authenticated: true });
+      expect(JSON.stringify(response.body)).not.toContain("mock-jwt");
+      const cookies = response.headers["set-cookie"] as unknown as string[];
+      expect(cookies).toEqual(expect.arrayContaining([
+        expect.stringContaining("amana_access=mock-jwt"),
+        expect.stringContaining("amana_refresh=mock-refresh"),
+      ]));
+      for (const cookie of cookies) {
+        expect(cookie).toContain("HttpOnly");
+        expect(cookie).toContain("Secure");
+        expect(cookie).toContain("SameSite=Strict");
+      }
     });
 
     it("should return 401 for invalid signature or expired challenge", async () => {
@@ -101,26 +120,35 @@ describe("Auth Routes", () => {
   });
 
   describe("POST /auth/refresh", () => {
-    it("should return 200 and new token", async () => {
-      (AuthService.refreshToken as jest.Mock).mockResolvedValue("new-jwt");
+    it("rotates the HttpOnly refresh cookie", async () => {
+      (AuthService.rotateRefreshToken as jest.Mock).mockResolvedValue({
+        accessToken: "new-jwt",
+        refreshToken: "new-refresh",
+      });
 
       const response = await request(app)
         .post("/auth/refresh")
-        .set("Authorization", "Bearer old.jwt.token");
+        .set("Origin", "https://app.amana.com")
+        .set("Cookie", "amana_refresh=old-refresh");
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ token: "new-jwt" });
-      expect(AuthService.refreshToken).toHaveBeenCalledWith("old.jwt.token");
+      expect(response.body).toEqual({ authenticated: true });
+      expect(AuthService.rotateRefreshToken).toHaveBeenCalledWith("old-refresh");
+      expect(response.headers["set-cookie"]).toEqual(expect.arrayContaining([
+        expect.stringContaining("amana_access=new-jwt"),
+        expect.stringContaining("amana_refresh=new-refresh"),
+      ]));
     });
 
     it("should return 401 if token too old to refresh", async () => {
-      (AuthService.refreshToken as jest.Mock).mockRejectedValue(
+      (AuthService.rotateRefreshToken as jest.Mock).mockRejectedValue(
         new AppError(ErrorCode.AUTH_ERROR, "Token too old to refresh", 401)
       );
 
       const response = await request(app)
         .post("/auth/refresh")
-        .set("Authorization", "Bearer very.old.jwt");
+        .set("Origin", "https://app.amana.com")
+        .set("Cookie", "amana_refresh=very-old-refresh");
 
       expect(response.status).toBe(401);
       expect(response.body.error).toBe("Token too old to refresh");
@@ -129,7 +157,7 @@ describe("Auth Routes", () => {
     it("should return 401 if authorization header is missing", async () => {
       const response = await request(app).post("/auth/refresh");
       expect(response.status).toBe(401);
-      expect(response.body.error).toContain("Missing or invalid authorization header");
+      expect(response.body.error).toContain("Missing refresh token cookie");
     });
   });
 

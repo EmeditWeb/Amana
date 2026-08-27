@@ -8,8 +8,8 @@ info:
     Authentication flow:
     1. Call `POST /auth/challenge` with a Stellar public key.
     2. Sign the returned challenge with the wallet.
-    3. Exchange the signature at `POST /auth/verify` for a bearer token.
-    4. Send `Authorization: Bearer <token>` to protected endpoints.
+    3. Exchange the signature at `POST /auth/verify` for an HttpOnly session cookie.
+    4. Send requests with credentials so the browser includes the cookie automatically.
 
     JWT semantics enforced by middleware:
     - `iss` must match `JWT_ISSUER` (default `amana`)
@@ -43,10 +43,11 @@ tags:
   - name: Goals
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: amana_access
+      description: HttpOnly, Secure, SameSite=Strict access-token cookie.
   parameters:
     TradeIdPath:
       in: path
@@ -254,12 +255,13 @@ components:
     AuthVerifyResponse:
       type: object
       properties:
-        token:
-          type: string
-          description: JWT bearer token for subsequent API calls.
-      required: [token]
+        authenticated:
+          type: boolean
+          enum: [true]
+          description: Confirms that the HttpOnly access and refresh cookies were issued.
+      required: [authenticated]
       example:
-        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example
+        authenticated: true
     LogoutResponse:
       type: object
       properties:
@@ -794,7 +796,7 @@ components:
         - timestamp
   responses:
     UnauthorizedError:
-      description: Missing, invalid, revoked, or semantically invalid bearer token.
+      description: Missing, invalid, revoked, or semantically invalid session.
       content:
         application/json:
           schema:
@@ -948,7 +950,7 @@ paths:
   /auth/verify:
     post:
       tags: [Auth]
-      summary: Verify the signed challenge and issue a JWT
+      summary: Verify the signed challenge and create a session
       description: |-
         Rate limited to 10 attempts per 15-minute window per IP.
         Error code references: `VALIDATION_ERROR`, `AUTH_ERROR`.
@@ -960,7 +962,7 @@ paths:
               $ref: "#/components/schemas/AuthVerifyRequest"
       responses:
         "200":
-          description: Signature verified and JWT issued.
+          description: Signature verified and HttpOnly session cookies issued.
           content:
             application/json:
               schema:
@@ -986,7 +988,7 @@ paths:
         Adds the current token `jti` to the revocation denylist until expiry.
         Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Logout completed.
@@ -1004,7 +1006,7 @@ paths:
       summary: Fetch the authenticated wallet's token balance
       description: "Error code references: `AUTH_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Balance retrieved.
@@ -1030,7 +1032,7 @@ paths:
       summary: Fetch Stellar path payment quotes
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/PathPaymentSourceAmount"
         - $ref: "#/components/parameters/PathPaymentSourceAsset"
@@ -1059,7 +1061,7 @@ paths:
       summary: Fetch the authenticated user's profile
       description: "Error code references: `AUTH_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Profile loaded or created.
@@ -1076,7 +1078,7 @@ paths:
       summary: Update the authenticated user's profile
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1102,7 +1104,7 @@ paths:
       summary: Fetch the authenticated user's reputation
       description: Returns reputation metrics for the wallet in the bearer token.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Reputation metrics.
@@ -1119,7 +1121,7 @@ paths:
       summary: Fetch the authenticated user's trust score
       description: Returns trust score details for the wallet in the bearer token.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Trust score details.
@@ -1194,7 +1196,7 @@ paths:
       summary: List dispute categories
       description: Returns active categories by default. Admin wallets can include inactive categories.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/IncludeInactiveCategoriesQuery"
       responses:
@@ -1215,7 +1217,7 @@ paths:
       summary: Create a dispute category
       description: Admin wallet access is required.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1248,7 +1250,7 @@ paths:
       tags: [Dispute Categories]
       summary: Fetch a dispute category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/DisputeCategoryIdPath"
       responses:
@@ -1271,7 +1273,7 @@ paths:
       summary: Update a dispute category
       description: Admin wallet access is required.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/DisputeCategoryIdPath"
       requestBody:
@@ -1308,7 +1310,7 @@ paths:
       summary: Deactivate a dispute category
       description: Admin wallet access is required. The category is marked inactive.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/DisputeCategoryIdPath"
       responses:
@@ -1332,7 +1334,7 @@ paths:
         Returns paginated list of disputes accessible to the authenticated mediator.
         Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: query
           name: status
@@ -1384,7 +1386,7 @@ paths:
         Valid transitions: OPEN → UNDER_REVIEW → RESOLVED/CLOSED
         Error code references: `AUTH_ERROR`, `DISPUTE_NOT_FOUND`, `DISPUTE_STATUS_TRANSITION_INVALID`, `DISPUTE_STATUS_CONFLICT`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/DisputeIdPath"
       requestBody:
@@ -1433,7 +1435,7 @@ paths:
         Provide optional `Idempotency-Key` for safe retries.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
       requestBody:
@@ -1460,7 +1462,7 @@ paths:
       summary: List the authenticated user's trades
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ListTradesStatusQuery"
         - $ref: "#/components/parameters/ListTradesPageQuery"
@@ -1486,7 +1488,7 @@ paths:
       summary: Fetch aggregate trade stats for the authenticated user
       description: "Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Trade stats returned.
@@ -1502,7 +1504,7 @@ paths:
       summary: Fetch a trade by identifier
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -1532,7 +1534,7 @@ paths:
         Supports optional `Idempotency-Key`.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
@@ -1561,7 +1563,7 @@ paths:
         Only the buyer can confirm delivery, and the trade must be `FUNDED`.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -1601,7 +1603,7 @@ paths:
         Supports optional `Idempotency-Key`.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
@@ -1643,7 +1645,7 @@ paths:
         or `categoryId`. The category must match an active dispute category.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
@@ -1696,7 +1698,7 @@ paths:
         - mediator/admin receives hashed identity values
         Error code references: `AUTH_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -1722,7 +1724,7 @@ paths:
       summary: Submit a manifest and build the submit-manifest XDR
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       requestBody:
@@ -1763,7 +1765,7 @@ paths:
       summary: List evidence records for a trade
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -1796,7 +1798,7 @@ paths:
         Successful range requests return `206 Partial Content` and set `accept-ranges: bytes`.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/EvidenceCidPath"
       responses:
@@ -1848,7 +1850,7 @@ paths:
         Supports optional `Idempotency-Key`.
         Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
       requestBody:
@@ -1913,7 +1915,7 @@ paths:
         to include a canonical payload and integrity signature metadata.
         Error code references: `AUTH_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
         - $ref: "#/components/parameters/HistoryFormatQuery"
@@ -1945,7 +1947,7 @@ paths:
       summary: Verify a signed audit history payload
       description: "Error code references: `AUTH_ERROR`, `VALIDATION_ERROR`, `DOMAIN_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
         - $ref: "#/components/parameters/AuditSignatureQuery"
@@ -1983,7 +1985,7 @@ paths:
         Requires admin authorization via ADMIN_STELLAR_PUBKEYS env.
         Error code references: `AUTH_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Treasury balance retrieved.
@@ -2011,7 +2013,7 @@ paths:
         Only admin wallets can perform this operation.
         Error code references: `AUTH_ERROR`, `DOMAIN_ERROR`, `INFRA_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2052,7 +2054,7 @@ paths:
         Returns the current treasury configuration including contract ID and network.
         Error code references: `AUTH_ERROR`, `INTERNAL_ERROR`.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Treasury configuration retrieved.
@@ -2107,13 +2109,13 @@ paths:
   /auth/refresh:
     post:
       tags: [Auth]
-      summary: Refresh an existing JWT
-      description: Exchanges a recently issued bearer token for a fresh token. This endpoint has its own stricter configurable rate limit.
+      summary: Rotate the refresh cookie
+      description: Atomically exchanges the HttpOnly refresh cookie for fresh access and refresh cookies. This endpoint has its own stricter configurable rate limit.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
-          description: New bearer token.
+          description: Fresh HttpOnly session cookies issued.
           content:
             application/json:
               schema:
@@ -2125,10 +2127,10 @@ paths:
   /auth/validate:
     get:
       tags: [Auth]
-      summary: Validate the current JWT
-      description: Returns the decoded authenticated user payload when the bearer token is valid.
+      summary: Validate the current session
+      description: Returns the decoded authenticated user payload when the access cookie is valid.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Token is valid.
@@ -2151,7 +2153,7 @@ paths:
       summary: Get notification preferences
       description: Returns the authenticated user's saved notification channel preferences.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Preference map by event type.
@@ -2175,7 +2177,7 @@ paths:
       summary: Update notification preferences
       description: Merges notification channel preferences for the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2210,7 +2212,7 @@ paths:
       summary: List in-app notifications
       description: Lists the authenticated user's in-app notifications with pagination and unread counts.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: query
           name: unreadOnly
@@ -2249,7 +2251,7 @@ paths:
       summary: Mark one notification as read
       description: Marks a notification owned by the authenticated user as read.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
@@ -2276,7 +2278,7 @@ paths:
       summary: Mark all notifications as read
       description: Marks every unread in-app notification for the authenticated user as read.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Count of notifications updated.
@@ -2298,7 +2300,7 @@ paths:
       summary: Export authenticated user's trades
       description: Returns a filtered trade export as JSON or CSV.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: query
           name: format
@@ -2338,7 +2340,7 @@ paths:
       summary: List saved trade templates
       description: Lists templates owned by the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Trade template list.
@@ -2354,7 +2356,7 @@ paths:
       summary: Save a trade template
       description: Saves a reusable trade template for the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2380,7 +2382,7 @@ paths:
       summary: Create a trade from a template
       description: Creates an unsigned trade from a saved template owned by the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: templateId
@@ -2405,7 +2407,7 @@ paths:
       summary: List watched trades
       description: Lists trades the authenticated user has added to their watchlist.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Watched trade list.
@@ -2428,7 +2430,7 @@ paths:
       summary: Watch a trade
       description: Adds a trade visible to the authenticated user to their watchlist.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -2450,7 +2452,7 @@ paths:
       summary: Stop watching a trade
       description: Removes a watched trade for the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -2473,7 +2475,7 @@ paths:
       summary: List trade notes
       description: Lists notes for a trade visible to the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -2497,7 +2499,7 @@ paths:
       summary: Add a trade note
       description: Adds a private note to a trade visible to the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       requestBody:
@@ -2529,7 +2531,7 @@ paths:
       summary: Get escrow release schedule
       description: Returns release milestones configured for a trade.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       responses:
@@ -2549,7 +2551,7 @@ paths:
       summary: Replace escrow release schedule
       description: Replaces the trade's milestone-based release schedule.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/TradeIdPath"
       requestBody:
@@ -2771,7 +2773,7 @@ paths:
       summary: List feature flags
       description: Admin-only endpoint that lists feature flag state.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Feature flag list.
@@ -2790,7 +2792,7 @@ paths:
       summary: Update a feature flag
       description: Admin-only endpoint that updates feature flag state and optional rollout percentage.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: name
@@ -2831,7 +2833,7 @@ paths:
       summary: Verify all evidence pins
       description: Admin-only synchronous evidence pin verification pass.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Verification report.
@@ -2850,7 +2852,7 @@ paths:
       summary: Verify and repair missing evidence pins
       description: Admin-only verification pass that can attempt repair for missing pins.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         content:
           application/json:
@@ -2878,7 +2880,7 @@ paths:
       summary: Verify one evidence CID
       description: Admin-only endpoint that checks a single IPFS CID pin.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2909,7 +2911,7 @@ paths:
       summary: Queue evidence verification
       description: Admin-only endpoint that queues an asynchronous evidence verification job.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         content:
           application/json:
@@ -2937,7 +2939,7 @@ paths:
       summary: List webhook subscriptions
       description: Lists webhook subscriptions owned by the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Webhook subscriptions.
@@ -2953,7 +2955,7 @@ paths:
       summary: Register a webhook subscription
       description: Registers a webhook URL and event list for the authenticated user. The plaintext webhook secret is visible only once on creation in the X-Webhook-Secret response header and is never returned in the JSON body.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -3000,7 +3002,7 @@ paths:
       summary: Delete a webhook subscription
       description: Deletes a webhook subscription owned by the authenticated user.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - in: path
           name: id
@@ -3027,7 +3029,7 @@ paths:
       summary: Fetch authenticated goal analytics
       description: "Error code references: `AUTH_ERROR`, `NOT_FOUND`, `INTERNAL_ERROR`."
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Goal analytics returned.

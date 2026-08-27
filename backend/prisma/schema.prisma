@@ -116,6 +116,8 @@ model Trade {
   @@index([buyerAddress])
   @@index([sellerAddress])
   @@index([status])
+  @@index([buyerAddress, status])
+  @@index([sellerAddress, status])
 }
 
 /// TradeTemplate stores a user's reusable trade terms. The buyer is always the

@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "preinstall": "node scripts/enforce-package-manager.cjs"
+  },
   "devDependencies": {
     "@types/yamljs": "^0.2.34"
   },

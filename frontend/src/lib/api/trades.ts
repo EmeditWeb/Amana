@@ -100,7 +100,7 @@ export const tradesApi = {
         from: params?.from,
         to: params?.to,
       })}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { credentials: "include" },
     );
     if (!response.ok) {
       throw new Error(response.statusText || "Failed to export trades");
