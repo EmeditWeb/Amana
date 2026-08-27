@@ -2,6 +2,10 @@ name: Security Audit
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - develop
   schedule:
     - cron: "0 6 * * 1"  # Every Monday at 6:00 UTC
 
@@ -43,27 +47,23 @@ jobs:
         run: |
           cd frontend
           pnpm install --frozen-lockfile
-          pnpm audit --audit-level=high
-        continue-on-error: true
+          pnpm audit --audit-level=high --json > audit-report.json
 
       - name: Audit backend dependencies
         run: |
           cd backend
           pnpm install --frozen-lockfile
-          pnpm audit --audit-level=high
-        continue-on-error: true
+          pnpm audit --audit-level=high --json > audit-report.json
 
       - name: Audit mobile dependencies
         run: |
           cd mobile
           pnpm install --frozen-lockfile
-          pnpm audit --audit-level=high
-        continue-on-error: true
+          pnpm audit --audit-level=high --json > audit-report.json
 
       - name: Audit Rust dependencies
         run: cargo audit
         working-directory: contracts
-        continue-on-error: true
 
       - name: Upload audit report
         if: always()
@@ -76,12 +76,9 @@ jobs:
             mobile/audit-report.json
           retention-days: 30
 
-  # Issue #998: weekly full-sweep vulnerability scan across every stack.
-  # Same caveat as ci.yml's trivy-scan job — no Docker images are built in
-  # this repo yet, so this scans each stack's dependency tree (fs mode)
-  # rather than a built image. continue-on-error here (unlike the blocking
-  # per-PR scan in ci.yml) since this is a reporting sweep, not a merge
-  # gate — findings still land in the Security tab either way.
+  # Issue #998: full-sweep vulnerability scan across every stack.
+  # No Docker images are built in this repo yet, so this scans each stack's
+  # dependency tree (fs mode) rather than a built image.
   trivy-scan-all:
     name: Trivy weekly scan (${{ matrix.stack }})
     runs-on: ubuntu-latest
@@ -98,7 +95,6 @@ jobs:
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.28.0
-        continue-on-error: true
         with:
           scan-type: fs
           scan-ref: ${{ matrix.stack }}
@@ -112,3 +108,51 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.stack }}.sarif
           category: trivy-weekly-${{ matrix.stack }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  notify:
+    name: Notify security audit failure
+    if: always() && contains(needs.*.result, 'failure')
+    needs:
+      - audit
+      - trivy-scan-all
+      - dependency-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add failure to job summary
+        run: |
+          {
+            echo "## Security audit failed"
+            echo "- Workflow: ${{ github.workflow }}"
+            echo "- Event: ${{ github.event_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- Response: see docs/runbooks/security-vulnerability-response.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send Slack notification
+        if: env.SECURITY_AUDIT_SLACK_WEBHOOK != ''
+        env:
+          SECURITY_AUDIT_SLACK_WEBHOOK: ${{ secrets.SECURITY_AUDIT_SLACK_WEBHOOK }}
+        run: |
+          payload=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg event "${{ github.event_name }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{text: ("Security audit failed in " + $repo + " (" + $event + ") at " + $sha + ". Run: " + $url)}')
+          curl --fail-with-body --silent --show-error \
+            -X POST -H 'Content-Type: application/json' \
+            --data "$payload" "$SECURITY_AUDIT_SLACK_WEBHOOK"
