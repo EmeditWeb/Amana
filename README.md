@@ -198,6 +198,7 @@ Key architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr):
 - [ADR-003: Off-chain vs. On-chain Data Partitioning](./docs/adr/ADR-003-offchain-vs-onchain-data-partitioning.md)
 - [ADR-004: Idempotency and Retry Strategy](./docs/adr/ADR-004-idempotency-and-retry-strategy.md)
 - [ADR-005: Frontend State Management](./docs/adr/ADR-005-frontend-state-management.md)
+- [ADR-008: CI/CD Pipeline Architecture](./docs/adr/ADR-008-cicd-pipeline-architecture.md)
 
 ## 🤝 Contributing
 
