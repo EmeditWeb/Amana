@@ -44,6 +44,7 @@ export class EventIndexerService {
   private server: StellarSdk.rpc.Server;
   private running: boolean = false;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  private activePoll: Promise<void> | null = null;
   private lastIngestedLedger: number = 0;
   private backoffMs: number;
 
@@ -78,18 +79,33 @@ export class EventIndexerService {
     this.scheduleNextPoll(0);
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false;
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
+    }
+    if (this.activePoll) {
+      await this.activePoll;
+      this.activePoll = null;
     }
     appLogger.info("[EventIndexer] Stopped");
   }
 
   private scheduleNextPoll(delayMs: number): void {
     if (!this.running) return;
-    this.timeoutHandle = setTimeout(() => this.pollEvents(), delayMs);
+    this.timeoutHandle = setTimeout(() => {
+      const poll = this.pollEvents();
+      this.activePoll = poll;
+      void poll.then(
+        () => {
+          if (this.activePoll === poll) this.activePoll = null;
+        },
+        () => {
+          if (this.activePoll === poll) this.activePoll = null;
+        },
+      );
+    }, delayMs);
   }
 
   async pollEvents(): Promise<void> {

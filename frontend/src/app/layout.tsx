@@ -13,6 +13,7 @@ import { ToastProvider } from "@/hooks/useToast";
 import { ThemeProvider } from "@/hooks/useTheme";
 import RegisterSW from "@/components/RegisterSW";
 import { LocaleSync } from "@/components/LocaleSync";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -81,7 +82,9 @@ export default async function RootLayout({
             <AuthProvider>
               <ToastProvider>
                 <LocaleSync />
-                <AppShell>{children}</AppShell>
+                <ErrorBoundary>
+                  <AppShell>{children}</AppShell>
+                </ErrorBoundary>
                 <RegisterSW />
                 <ToastContainer />
               </ToastProvider>

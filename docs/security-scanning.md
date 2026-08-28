@@ -15,9 +15,10 @@ workflow** on any **high** or **critical** severity vulnerability.
 | `backend` | pnpm audit | `pnpm audit --audit-level=high` | high + critical |
 | `mobile` | pnpm audit | `pnpm audit --audit-level=high` | high + critical |
 | `contracts` | cargo audit | `cargo audit` | any advisory |
+| `routes-d` | npm audit | `npm audit --audit-level=high` | high + critical |
 
 Pull requests also run GitHub's dependency review with a high-severity
-threshold. The weekly workflow runs Trivy across all four stacks and uploads
+threshold. The weekly workflow runs Trivy across all five stacks and uploads
 SARIF results to the GitHub Security tab. Audit JSON and SARIF files are kept
 as workflow artifacts for investigation.
 
@@ -42,7 +43,7 @@ The script auto-skips tools that are not installed and summarises results in `se
 
 ## Fixing Vulnerabilities
 
-1. **npm** — Run `npm audit fix` in the affected workspace (`frontend/` or `backend/`). For breaking changes use `npm audit fix --force` and test thoroughly.
+1. **npm** — Run `npm audit fix` in the affected workspace (`frontend/`, `backend/`, `mobile/`, or `routes-d/`). For breaking changes use `npm audit fix --force` and test thoroughly.
 2. **cargo** — Update the affected crate in `Cargo.toml` and run `cargo update`.
 3. If no fix is available, open a tracking issue and add an advisory exception in `contracts/.cargo/audit.toml` with a justification comment.
 

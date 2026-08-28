@@ -1,4 +1,6 @@
-const fr: Record<string, string> = {
+import type { TranslationKeys } from "./en";
+
+const fr: Record<TranslationKeys, string> = {
   // Navigation
   "nav.dashboard": "Tableau de bord",
   "nav.trades": "\u00c9changes",

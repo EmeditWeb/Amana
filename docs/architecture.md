@@ -485,6 +485,15 @@ All State Changes
          └─────────────────┘
 ```
 
+## CI Pipeline
+
+The CI workflow detects changes independently for `frontend`, `backend`,
+`mobile`, `contracts`, and `routes-d`. Changes under `routes-d/` run a
+dedicated Node 20 job using its committed npm lockfile. That job runs npm audit,
+TypeScript build and lint checks, Vitest with an 80% line, function, branch, and
+statement coverage threshold, and uploads the LCOV report to Codecov. The
+change-gated Trivy filesystem scan also covers `routes-d`.
+
 ## Observability Stack
 
 - **Logging**: Pino (structured logs)

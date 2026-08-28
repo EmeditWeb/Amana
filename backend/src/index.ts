@@ -14,9 +14,19 @@ import { initializeTracing } from "./config/tracing";
 import { HealthService } from "./services/health.service";
 import { createEvidenceVerificationWorker } from "./jobs/workers/evidence-verification.worker";
 import { createTrustScoreRecalculationWorker } from "./jobs/workers/trust-score-recalculation.worker";
-import { createIdempotencyCleanupWorker, scheduleIdempotencyCleanup } from "./jobs/workers/idempotency-cleanup.worker";
+import {
+  createIdempotencyCleanupWorker,
+  idempotencyCleanupQueue,
+  scheduleIdempotencyCleanup,
+} from "./jobs/workers/idempotency-cleanup.worker";
 import { evidenceVerificationQueue, trustScoreRecalculationQueue, webhookQueue, notificationQueue, exportQueue } from "./jobs/queue";
-import { registerQueueForMetrics, startQueueMetricsCollection } from "./lib/bullMetrics";
+import {
+  registerQueueForMetrics,
+  startQueueMetricsCollection,
+  stopQueueMetricsCollection,
+} from "./lib/bullMetrics";
+import { createGracefulShutdown } from "./lib/gracefulShutdown";
+import type { Server } from "http";
 
 
 // Initialize distributed tracing before any other imports
@@ -80,6 +90,12 @@ if (env.NODE_ENV !== "production" && openapiSpec) {
 
 const eventListenerService = new EventListenerService(prisma);
 const healthService = new HealthService();
+let eventStreamService: EventStreamService | null = null;
+const workers = [] as Array<{ close: () => Promise<void> }>;
+const services = [eventListenerService, eventIndexerService] as Array<{
+  close: () => Promise<void> | void;
+}>;
+let httpServer: Server | null = null;
 
 async function bootstrap() {
   const isTest = (process.env.NODE_ENV ?? env.NODE_ENV) === "test";
@@ -99,7 +115,7 @@ async function bootstrap() {
     }
   }
 
-  const server = app.listen(port, async () => {
+  httpServer = app.listen(port, async () => {
     appLogger.info({ port }, "Amana backend listening");
 
     try {
@@ -117,7 +133,8 @@ async function bootstrap() {
     }
 
     try {
-      new EventStreamService(server);
+      eventStreamService = new EventStreamService(httpServer!);
+      services.push(eventStreamService);
       appLogger.info("EventStreamService initialized");
     } catch (error) {
       appLogger.warn({ error }, "Failed to initialize EventStreamService");
@@ -133,7 +150,7 @@ async function bootstrap() {
 
     // Start evidence verification worker for async jobs
     try {
-      createEvidenceVerificationWorker();
+      workers.push(createEvidenceVerificationWorker());
       appLogger.info("EvidenceVerificationWorker started");
     } catch (error) {
       appLogger.error({ error }, "Failed to start EvidenceVerificationWorker");
@@ -141,7 +158,7 @@ async function bootstrap() {
 
     // Start trust score recalculation worker
     try {
-      createTrustScoreRecalculationWorker();
+      workers.push(createTrustScoreRecalculationWorker());
       appLogger.info("TrustScoreRecalculationWorker started");
     } catch (error) {
       appLogger.error({ error }, "Failed to start TrustScoreRecalculationWorker");
@@ -149,7 +166,7 @@ async function bootstrap() {
 
     // Start idempotency key GC worker and schedule daily cron
     try {
-      createIdempotencyCleanupWorker();
+      workers.push(createIdempotencyCleanupWorker());
       await scheduleIdempotencyCleanup();
       appLogger.info("IdempotencyCleanupWorker started");
     } catch (error) {
@@ -217,12 +234,22 @@ bootstrap().catch((error) => {
   process.exit(1);
 });
 
-const shutdown = async (signal: string) => {
-  appLogger.info({ signal }, "Received shutdown signal. Shutting down gracefully...");
-  eventListenerService.stop();
-  await prisma.$disconnect();
-  process.exit(0);
-};
+const shutdown = createGracefulShutdown({
+  getServer: () => httpServer,
+  services,
+  workers,
+  queues: [
+    webhookQueue,
+    notificationQueue,
+    exportQueue,
+    evidenceVerificationQueue,
+    trustScoreRecalculationQueue,
+    idempotencyCleanupQueue,
+  ],
+  stopMetrics: stopQueueMetricsCollection,
+  disconnectDatabase: () => prisma.$disconnect(),
+  exit: (code) => process.exit(code),
+});
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

@@ -1,5 +1,3 @@
-export type TranslationKeys = typeof en;
-
 const en = {
   // Navigation
   "nav.dashboard": "Dashboard",
@@ -241,5 +239,7 @@ const en = {
   "reputation.trustHistorySubtitle": "Recent events that impacted your reputation score",
   "reputation.trustHistoryEmpty": "No reputation events yet. Complete trades to build your trust history.",
 } as const;
+
+export type TranslationKeys = keyof typeof en;
 
 export default en;

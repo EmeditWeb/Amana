@@ -220,7 +220,7 @@ export class EventStreamService {
     };
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
@@ -237,7 +237,9 @@ export class EventStreamService {
     }
     this.clients.clear();
     this.userCounts.clear();
-    this.wss.close();
+    await new Promise<void>((resolve, reject) => {
+      this.wss.close((error) => (error ? reject(error) : resolve()));
+    });
     if (EventStreamService.current === this) {
       EventStreamService.current = null;
     }
