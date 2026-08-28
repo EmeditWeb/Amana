@@ -29,6 +29,7 @@ jobs:
             frontend/pnpm-lock.yaml
             backend/pnpm-lock.yaml
             mobile/pnpm-lock.yaml
+            routes-d/package-lock.json
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
@@ -65,6 +66,12 @@ jobs:
         run: cargo audit
         working-directory: contracts
 
+      - name: Audit routes-d dependencies
+        run: |
+          cd routes-d
+          npm ci
+          npm audit --audit-level=high --json > audit-report.json
+
       - name: Upload audit report
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,6 +81,7 @@ jobs:
             frontend/audit-report.json
             backend/audit-report.json
             mobile/audit-report.json
+            routes-d/audit-report.json
           retention-days: 30
 
   # Issue #998: full-sweep vulnerability scan across every stack.
@@ -88,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stack: [frontend, backend, mobile, contracts]
+        stack: [frontend, backend, mobile, contracts, routes-d]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

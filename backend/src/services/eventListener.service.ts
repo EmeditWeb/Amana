@@ -108,6 +108,7 @@ export class EventListenerService {
   private lastLedger: number = 0;
   private running: boolean = false;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  private activePoll: Promise<void> | null = null;
   private currentBackoffMs: number;
   private stellarCircuit: CircuitBreaker;
 
@@ -154,11 +155,15 @@ export class EventListenerService {
   }
 
   /** Gracefully stop the polling loop. */
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false;
     if (this.timeoutHandle) {
       clearTimeout(this.timeoutHandle);
       this.timeoutHandle = null;
+    }
+    if (this.activePoll) {
+      await this.activePoll;
+      this.activePoll = null;
     }
     appLogger.info("[EventListener] Stopped");
   }
@@ -166,7 +171,18 @@ export class EventListenerService {
   /** Schedule the next poll with a given delay. */
   private scheduleNextPoll(delayMs: number): void {
     if (!this.running) return;
-    this.timeoutHandle = setTimeout(() => this.pollEvents(), delayMs);
+    this.timeoutHandle = setTimeout(() => {
+      const poll = this.pollEvents();
+      this.activePoll = poll;
+      void poll.then(
+        () => {
+          if (this.activePoll === poll) this.activePoll = null;
+        },
+        () => {
+          if (this.activePoll === poll) this.activePoll = null;
+        },
+      );
+    }, delayMs);
   }
 
   /** Single poll cycle: fetch events from RPC, parse, and dispatch. */
