@@ -452,11 +452,12 @@ jobs:
     if: >
       (matrix.stack == 'frontend' && needs.changes.outputs.frontend == 'true') ||
       (matrix.stack == 'backend' && needs.changes.outputs.backend == 'true') ||
-      (matrix.stack == 'routes-d' && needs.changes.outputs.routes_d == 'true')
+      (matrix.stack == 'routes-d' && needs.changes.outputs.routes_d == 'true') ||
+      (matrix.stack == 'contracts' && needs.changes.outputs.contracts == 'true')
     strategy:
       fail-fast: false
       matrix:
-        stack: [frontend, backend, routes-d]
+        stack: [frontend, backend, routes-d, contracts]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
