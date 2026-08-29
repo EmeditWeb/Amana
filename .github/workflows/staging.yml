@@ -80,6 +80,10 @@ jobs:
         run: ./scripts/staging-validate.sh
         timeout-minutes: 5
 
-      - name: Tear down staging stack
+      - name: Tear down staging stack (preserve volumes on failure for debugging)
         if: always()
+        run: docker compose --profile staging down --remove-orphans
+
+      - name: Remove staging volumes (successful run only)
+        if: success()
         run: docker compose --profile staging down -v --remove-orphans
