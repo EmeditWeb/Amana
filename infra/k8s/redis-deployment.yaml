@@ -15,13 +15,15 @@ spec:
       labels:
         app: redis
     spec:
+      securityContext:
+        fsGroup: 999
       containers:
         - name: redis
           image: redis:7-alpine
           command:
             - redis-server
             - --requirepass
-            - $(REDIS_PASSWORD)
+			- $(REDIS_PASSWORD)
           ports:
             - containerPort: 6379
               name: redis
@@ -31,6 +33,19 @@ spec:
                 secretKeyRef:
                   name: amana-secrets
                   key: REDIS_PASSWORD
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
           resources:
             requests:
               cpu: 50m
@@ -56,3 +71,8 @@ spec:
                 - ping
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
