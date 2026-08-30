@@ -37,12 +37,12 @@ jobs:
       routes_d: ${{ steps.filter.outputs.routes_d }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Detect changed paths
         id: filter
         # Pinned from dorny/paths-filter@v3
-        uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         with:
           filters: |
             frontend:
@@ -60,6 +60,9 @@ jobs:
             routes_d:
               - 'routes-d/**'
 
+      - name: Check for unpinned GitHub Actions
+        run: bash ./scripts/check-unpinned-actions.sh
+
   stack:
     name: ${{ matrix.stack }} CI
     runs-on: ubuntu-latest
@@ -74,15 +77,15 @@ jobs:
         stack: [frontend, backend, mobile, contracts]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup pnpm
         if: matrix.stack != 'contracts'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
       - name: Setup Node
         if: matrix.stack != 'contracts'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           cache: pnpm
           cache-dependency-path: ${{ matrix.stack == 'frontend' && 'frontend/pnpm-lock.yaml' || matrix.stack == 'backend' && 'backend/pnpm-lock.yaml' || matrix.stack == 'mobile' && 'mobile/pnpm-lock.yaml' }}
@@ -95,7 +98,7 @@ jobs:
 
       - name: Cache Rust dependencies and build
         if: matrix.stack == 'contracts'
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: contracts
           cache-targets: true
@@ -103,7 +106,7 @@ jobs:
       - name: Cache cargo-audit binary
         if: matrix.stack == 'contracts'
         id: cache-cargo-audit
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
         with:
           path: ~/.cargo/bin/cargo-audit
           key: cargo-audit-${{ runner.os }}-v0.21
@@ -139,7 +142,7 @@ jobs:
 
       - name: Upload frontend coverage
         if: matrix.stack == 'frontend'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: frontend/coverage/lcov.info
@@ -163,7 +166,7 @@ jobs:
 
       - name: Upload backend coverage
         if: matrix.stack == 'backend'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: backend/coverage/lcov.info
@@ -188,7 +191,7 @@ jobs:
 
       - name: Upload mobile coverage
         if: matrix.stack == 'mobile'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: mobile/coverage/lcov.info
@@ -218,7 +221,7 @@ jobs:
 
       - name: Install cargo-llvm-cov
         if: matrix.stack == 'contracts'
-        uses: taiki-e/install-action@cargo-llvm-cov
+        uses: taiki-e/install-action@6a241a1328ca6173d49760e1de6702cd5e52ef94 # cargo-llvm-cov
 
       - name: Generate contracts coverage
         if: matrix.stack == 'contracts'
@@ -227,7 +230,7 @@ jobs:
 
       - name: Upload contracts coverage
         if: matrix.stack == 'contracts'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: contracts/coverage/lcov.info
@@ -260,7 +263,7 @@ jobs:
           echo "Mobile checks completed at $(date --utc)" > mobile/ci-artifacts/mobile-ci-summary.txt
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.stack }}-artifact
           path: ${{ matrix.stack == 'frontend' && 'frontend/coverage/' || matrix.stack == 'backend' && 'backend/coverage/' || matrix.stack == 'mobile' && 'mobile/ci-artifacts/' || matrix.stack == 'contracts' && 'contracts/amana_escrow/target/wasm32-unknown-unknown/release/amana_escrow.wasm' }}
@@ -273,10 +276,10 @@ jobs:
     if: needs.changes.outputs.routes_d == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: npm
@@ -303,7 +306,7 @@ jobs:
         working-directory: routes-d
 
       - name: Upload routes-d coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: routes-d/coverage/lcov.info
@@ -313,7 +316,7 @@ jobs:
 
       - name: Upload routes-d artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: routes-d-artifact
           path: routes-d/coverage/
@@ -330,13 +333,13 @@ jobs:
       needs.changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: pnpm
@@ -406,7 +409,7 @@ jobs:
 
       - name: Upload Playwright reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-e2e-reports
           path: |
@@ -460,10 +463,10 @@ jobs:
         stack: [frontend, backend, routes-d, contracts]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           scan-type: fs
           scan-ref: ${{ matrix.stack }}
@@ -474,10 +477,58 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.28.0
         with:
           sarif_file: trivy-${{ matrix.stack }}.sarif
           category: trivy-${{ matrix.stack }}
+
+  trivy-image-scan:
+    name: Trivy container image scan
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run Trivy image scan (postgres:17-alpine)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          scan-ref: postgres:17-alpine
+          format: sarif
+          output: trivy-postgres.sarif
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+      - name: Run Trivy image scan (redis:7-alpine)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          scan-ref: redis:7-alpine
+          format: sarif
+          output: trivy-redis.sarif
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+      - name: Upload SARIF to GitHub Security tab (postgres)
+        if: always()
+        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.28.0
+        with:
+          sarif_file: trivy-postgres.sarif
+          category: trivy-image-postgres
+
+      - name: Upload SARIF to GitHub Security tab (redis)
+        if: always()
+        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.28.0
+        with:
+          sarif_file: trivy-redis.sarif
+          category: trivy-image-redis
 
   contract-tests:
     name: Frontend ↔ Backend Pact contracts
@@ -488,13 +539,13 @@ jobs:
       needs.changes.outputs.backend == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: pnpm
@@ -523,7 +574,7 @@ jobs:
         working-directory: backend
 
       - name: Publish pact artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: amana-pacts
           path: frontend/tests/pact/pacts/*.json

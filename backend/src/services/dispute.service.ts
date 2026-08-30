@@ -1,6 +1,6 @@
 import { PrismaClient, DisputeStatus } from "@prisma/client";
 import { AppError, ErrorCode } from "../errors/errorCodes";
-import { getMediatorAllowlist, isMediatorAddress } from "../lib/accessControl";
+import { isMediatorAddress } from "../lib/accessControl";
 import { TracingHelper } from "../config/tracing";
 import {
   COMPLETED_DISPUTE_STATUSES,

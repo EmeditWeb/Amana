@@ -52,6 +52,7 @@ import { EventIndexerService } from "./services/event-indexer";
 import { env } from "./config/env";
 import { validateEnvironment } from "./config/envValidator";
 import { csrfProtection } from "./middleware/csrf.middleware";
+import { requestTimeoutMiddleware } from "./middleware/request-timeout.middleware";
 
 // Fail fast at boot if required environment variables are missing
 validateEnvironment();
@@ -150,6 +151,9 @@ export function createApp(
   // Body size limits: 100 KB for JSON, 5 MB for URL-encoded (covers file references)
   app.use(express.json({ limit: '100kb' }));
   app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+  // Request timeout middleware — 30s default, longer for evidence/export routes
+  app.use(requestTimeoutMiddleware);
 
   // Origin validation is mandatory for cookie-authenticated mutations.
   app.use(csrfProtection());

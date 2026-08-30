@@ -240,7 +240,8 @@ export class FeeAccountingService {
         totalExported++;
       }
 
-      lastId = batch[batch.length - 1].id;
+      const lastRecord = batch[batch.length - 1];
+      if (lastRecord) lastId = lastRecord.id;
 
       if (batch.length < take) break;
     }
