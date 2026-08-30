@@ -6,7 +6,7 @@ import { validateRequest } from "../middleware/validateRequest";
 import { Router } from "express";
 import { z } from "zod";
 import { AppError } from "../errors/errorCodes";
-import { getMediatorAllowlist, isMediatorAddress } from "../lib/accessControl";
+import { isMediatorAddress } from "../lib/accessControl";
 import { Parser } from "json2csv";
 
 const listDisputesQuerySchema = z.object({

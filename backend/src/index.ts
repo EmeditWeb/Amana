@@ -92,9 +92,10 @@ const eventListenerService = new EventListenerService(prisma);
 const healthService = new HealthService();
 let eventStreamService: EventStreamService | null = null;
 const workers = [] as Array<{ close: () => Promise<void> }>;
-const services = [eventListenerService, eventIndexerService] as Array<{
-  close: () => Promise<void> | void;
-}>;
+const services: Array<{ close: () => Promise<void> | void }> = [
+  { close: () => eventListenerService.stop() },
+  { close: () => eventIndexerService.stop() },
+];
 let httpServer: Server | null = null;
 
 async function bootstrap() {
@@ -134,7 +135,7 @@ async function bootstrap() {
 
     try {
       eventStreamService = new EventStreamService(httpServer!);
-      services.push(eventStreamService);
+      services.push({ close: () => eventStreamService?.stop() });
       appLogger.info("EventStreamService initialized");
     } catch (error) {
       appLogger.warn({ error }, "Failed to initialize EventStreamService");

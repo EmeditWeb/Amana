@@ -1,5 +1,6 @@
 import type { Server } from "http";
 import { appLogger } from "../middleware/logger";
+import { Worker } from "bullmq";
 
 export interface ShutdownClosable {
   close: () => Promise<void> | void;
@@ -8,7 +9,7 @@ export interface ShutdownClosable {
 export interface ShutdownDependencies {
   getServer: () => Server | null;
   services: ShutdownClosable[];
-  workers: ShutdownClosable[];
+  workers: (Worker | ShutdownClosable)[];
   queues: ShutdownClosable[];
   stopMetrics: () => void;
   disconnectDatabase: () => Promise<void>;
@@ -24,7 +25,7 @@ export function createGracefulShutdown({
   stopMetrics,
   disconnectDatabase,
   exit,
-  timeoutMs = 30_000,
+  timeoutMs = 60_000,
 }: ShutdownDependencies): (signal: string) => Promise<void> {
   let shuttingDown = false;
 
@@ -48,8 +49,22 @@ export function createGracefulShutdown({
       appLogger.info("Stopping event services");
       await Promise.all(services.map((service) => service.close()));
 
-      appLogger.info("Draining BullMQ workers");
-      await Promise.all(workers.map((worker) => worker.close()));
+      appLogger.info("Closing BullMQ workers (close() waits for in-flight jobs)");
+      // BullMQ Worker.close() (force=false) waits for in-flight jobs to complete.
+      // Queue.drain() removes queued jobs and is NOT needed for graceful shutdown.
+      const closePromises = workers.map(async (worker) => {
+        if (worker) {
+          const workerId = (worker as Worker).name ?? 'unknown';
+          appLogger.info({ worker: workerId }, "Closing worker");
+          try {
+            await worker.close();
+            appLogger.info({ worker: workerId }, "Worker closed successfully");
+          } catch (error) {
+            appLogger.error({ error, worker: workerId }, "Error closing worker, forcing close");
+          }
+        }
+      });
+      await Promise.all(closePromises);
 
       appLogger.info("Closing BullMQ queues");
       await Promise.all(queues.map((queue) => queue.close()));
